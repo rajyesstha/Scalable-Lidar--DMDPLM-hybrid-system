@@ -34,37 +34,120 @@ orders = [
     '4Y',  '4O',  '4U',  '4Z',  '4D'
 ]
 
+# --- Group diffraction orders ---
+unique_orders = sorted(
+    list(set(o[:-1] for o in orders)),
+    key=lambda x: int(x)
+)
+
+# --- RMS deviation for each diffraction order ---
+print("RMS deviation for each diffraction order:")
+
+rms_by_order = {}
+
+for order in unique_orders:
+    indices = [i for i, o in enumerate(orders) if o.startswith(order)]
+
+    gt = ground_truth[indices]
+    meas = computed[indices]
+
+    residuals = meas - gt
+    rms = np.sqrt(np.mean(residuals ** 2))
+
+    rms_by_order[order] = rms
+
+    print(f"Order {order}: RMS deviation = {rms:.3f} cm")
+
 # --- Plotting ---
-unique_orders = sorted(list(set(o[:-1] for o in orders)), key=lambda x: int(x))
-colors = plt.cm.viridis(np.linspace(0, 1, len(unique_orders)))
+# --- Plotting ---
+order_colors = {
+    "-2": "#0000FF",   # blue
+    "-1": "#00FF00",   # green
+    "0":  "#FF0000",   # red
+    "1":  "#C8C800",   # yellow/olive
+    "2":  "#FF00FF",   # magenta
+    "3":  "#00FFFF",   # cyan
+    "4":  "#8080FF"    # light blue/purple
+}
 
 plt.figure(figsize=(11, 6), dpi=300)
 
-for order, color in zip(unique_orders, colors):
+for order in unique_orders:
+    color = order_colors[order]
+
     indices = [i for i, o in enumerate(orders) if o.startswith(order)]
+
     x = ground_truth[indices]
     y = computed[indices]
     yerr = errors[indices]
-    labels = [orders[i] for i in indices]
 
-    # Scatter with error bars
-    plt.errorbar(x, y, yerr=yerr, fmt='o', capsize=4, color=color, label=f"Order {order}")
+    plt.errorbar(
+        x,
+        y,
+        yerr=yerr,
+        fmt='o',
+        capsize=4,
+        color=color,
+        ecolor=color,
+        markerfacecolor=color,
+        markeredgecolor='black',
+        markeredgewidth=0.6,
+        label=f"Order {order}, RMS = {rms_by_order[order]:.2f} cm"
+    )
 
-    # Annotate points (e.g., '2Y')
-    #for xi, yi, label in zip(x, y, labels):
-     #   plt.text(xi + 0.5, yi + 0.5, label, fontsize=8, color=color)
-
-    # Linear fit
     model = LinearRegression().fit(x.reshape(-1, 1), y)
+
     x_fit = np.linspace(min(x), max(x), 100)
     y_fit = model.predict(x_fit.reshape(-1, 1))
-    plt.plot(x_fit, y_fit, linestyle='-', color=color)
+
+    plt.plot(
+        x_fit,
+        y_fit,
+        linestyle='-',
+        linewidth=2,
+        color=color
+    )
+
+# --- Optional 1:1 reference line ---
+#min_val = min(np.min(ground_truth), np.min(computed))
+#max_val = max(np.max(ground_truth), np.max(computed))
+#
+#plt.plot(
+#    [min_val, max_val],
+#    [min_val, max_val],
+#    'k--',
+#    linewidth=1.5,
+#    label="Ideal 1:1 Line"
+#)
 
 # --- Formatting ---
-plt.title("Linear Regression Analysis for Distance at 7 Diffraction Orders", fontsize=25)
-plt.xlabel("Ground Truth Distance (cm)", fontsize=20)
-plt.ylabel("Measured Distance with TOF (cm)", fontsize=20)
+plt.title(
+    "Linear Regression Analysis for Distance at 7 Diffraction Orders",
+    fontsize=25
+)
+
+plt.xlabel(
+    "Ground Truth Distance (cm)",
+    fontsize=20
+)
+
+plt.ylabel(
+    "Measured Distance (cm)",
+    fontsize=20
+)
+
+plt.xticks(fontsize=14)
+plt.yticks(fontsize=14)
+
 plt.grid(True, alpha=0.3)
-plt.legend(title="Diffraction Order", fontsize=12, loc="upper left", frameon=True)
+
+plt.legend(
+    title="Diffraction Order",
+    fontsize=10,
+    title_fontsize=12,
+    loc="upper left",
+    frameon=True
+)
+
 plt.tight_layout()
 plt.show()
