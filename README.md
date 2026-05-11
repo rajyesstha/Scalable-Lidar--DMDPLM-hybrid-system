@@ -1,23 +1,25 @@
 # Scalable LiDAR: DMD–PLM Hybrid Beam Steering System
 
-This repository documents a scalable hybrid LiDAR beam steering system based on a Digital Micromirror Device (DMD) and a Phase Light Modulator (PLM). The project focuses on programmable diffractive beam steering, computer-generated holography (CGH), phase-profile visualization, angular-resolution analysis, and time-of-flight distance validation across multiple diffraction orders.
+[![MATLAB](https://img.shields.io/badge/MATLAB-75.4%25-orange)](#)
+[![Python](https://img.shields.io/badge/Python-24.6%25-blue)](#)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-The system combines the fast binary modulation capability of a DMD with the fine phase-control capability of a PLM. This hybrid architecture enables coarse and fine optical beam steering without relying on large mechanical scanning components.
+This repository contains MATLAB and Python code used to develop and analyze a scalable hybrid LiDAR beam steering system based on a Digital Micromirror Device (DMD) and a Phase Light Modulator (PLM). The project focuses on programmable diffractive beam steering, computer-generated holography (CGH), phase-profile visualization, angular-resolution analysis, diffraction-efficiency analysis, and time-of-flight distance validation across multiple diffraction orders.
+
+The DMD provides fast binary spatial modulation and diffraction-order based field-of-view control, while the PLM provides calibrated phase modulation for fine angular steering. Together, the DMD and PLM enable a hybrid solid-state LiDAR architecture that can support sub-megapixel steering and can be scaled toward megapixel-class spatial addressing.
 
 ---
 
-## Project Overview
+## Project Motivation
 
-The DMD–PLM hybrid LiDAR system is designed to demonstrate a solid-state optical beam steering approach for scalable LiDAR applications.
+Mechanical LiDAR scanners can provide wide field-of-view coverage, but they often introduce limitations in scan speed, vibration tolerance, reliability, and system compactness. This project investigates a programmable optical beam steering architecture that reduces dependence on large mechanical scanning components.
 
-In this architecture:
+The main idea is to combine:
 
-- The **DMD** provides binary spatial modulation, diffraction-order selection, and coarse field-of-view steering.
-- The **PLM** provides calibrated phase modulation and fine sub-field-of-view beam steering.
-- **CGH patterns** are generated to steer the beam into different angular directions.
-- **Angular resolution** and **distance measurement accuracy** are analyzed across multiple diffraction orders.
-
-This project includes MATLAB and Python scripts for generating phase profiles, binary CGH patterns, angular-resolution plots, and measured-distance validation plots.
+- **DMD-based coarse steering** through binary diffractive modulation.
+- **PLM-based fine steering** through calibrated phase modulation.
+- **CGH-based beam control** for programmable steering directions.
+- **Experimental validation** using angular-resolution and distance-measurement analysis.
 
 ---
 
