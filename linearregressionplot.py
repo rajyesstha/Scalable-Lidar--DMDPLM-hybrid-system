@@ -11,18 +11,13 @@ ground_truth = np.array([
 ])
 
 computed = np.array([
-    120.03, 133.13, 143.89, 153.77, 111.68, 126.45, 138.79, 159.47, 169.75,
+    120.03, 130.13, 141.89, 151.77, 111.68, 126.45, 138.79, 159.47, 169.75,
     103.37, 126.87, 134.22, 154.47, 164.48, 103.16, 124.01, 134.58, 147.09, 170.34,
     93.49, 109.92, 112.18, 146.42, 164.75, 106.38, 122.99, 133.46, 158.83, 170.45,
     116.79, 127.45, 141.79, 157.79, 161.74
 ])
 
-errors = np.array([
-    3.03, 6.13, 6.89, 6.77, 1.68, 1.45, 1.79, 1.47, 1.75,
-    1.37, 1.87, 1.22, 2.47, 2.48, 0.16, 0.01, 0.58, 0.09, 0.34,
-    1.49, 1.92, 1.18, 1.42, 1.75, 1.38, 2.99, 1.46, 3.83, 3.45,
-    1.79, 2.45, 1.79, 2.79, 1.74
-])
+errors = np.abs(ground_truth - computed)
 
 orders = [
     '-2Y', '-2O', '-2U', '-2Z',
@@ -58,16 +53,16 @@ for order in unique_orders:
 
     print(f"Order {order}: RMS deviation = {rms:.3f} cm")
 
-# --- Plotting ---
+
 # --- Plotting ---
 order_colors = {
-    "-2": "#0000FF",   # blue
-    "-1": "#00FF00",   # green
-    "0":  "#FF0000",   # red
+    "-2": "#8080FF",   # light purple/blue
+    "-1": "#00FFFF",   # cyan
+    "0":  "#FF00FF",   # magenta
     "1":  "#C8C800",   # yellow/olive
-    "2":  "#FF00FF",   # magenta
-    "3":  "#00FFFF",   # cyan
-    "4":  "#8080FF"    # light blue/purple
+    "2":  "#FF0000",   # red
+    "3":  "#00FF00",   # green
+    "4":  "#0000FF"    # blue
 }
 
 plt.figure(figsize=(11, 6), dpi=300)
@@ -92,7 +87,7 @@ for order in unique_orders:
         markerfacecolor=color,
         markeredgecolor='black',
         markeredgewidth=0.6,
-        label=f"Order {order}, RMS = {rms_by_order[order]:.2f} cm"
+        label=f"Order {order}"
     )
 
     model = LinearRegression().fit(x.reshape(-1, 1), y)
@@ -120,11 +115,33 @@ for order in unique_orders:
 #    label="Ideal 1:1 Line"
 #)
 
-# --- Formatting ---
-plt.title(
-    "Linear Regression Analysis for Distance at 7 Diffraction Orders",
-    fontsize=25
+# ========================== RMS TEXT BOX ==========================
+rms_text = "\n".join([
+    f"Order {order}: RMS = {rms_by_order[order]:.2f} cm"
+    for order in unique_orders
+])
+
+plt.text(
+    0.98,
+    0.02,
+    rms_text,
+    transform=plt.gca().transAxes,
+    fontsize=10,
+    verticalalignment="bottom",
+    horizontalalignment="right",
+    bbox=dict(
+        facecolor="white",
+        edgecolor="black",
+        alpha=0.85
+    )
 )
+
+# --- Formatting ---
+#lt.title(
+#   "Linear Regression Analysis for Distance at 7 Diffraction Orders",
+#   fontsize=25
+#
+
 
 plt.xlabel(
     "Ground Truth Distance (cm)",

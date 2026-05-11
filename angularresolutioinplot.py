@@ -23,7 +23,7 @@ plt.xlabel('Diffraction Orders', fontsize=20)
 plt.ylabel('Angular Resolution (Deg)', fontsize=20)
 
 # Set y-axis limits and ticks
-plt.ylim(0, 1)
+plt.ylim(0.1, 0.3)
 plt.yticks(np.arange(0, 1.1, 0.2))
 
 # Add grid
