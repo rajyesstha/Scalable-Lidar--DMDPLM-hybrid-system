@@ -29,142 +29,148 @@ orders = [
     '4Y',  '4O',  '4U',  '4Z',  '4D'
 ]
 
-# --- Group diffraction orders ---
-unique_orders = sorted(
-    list(set(o[:-1] for o in orders)),
-    key=lambda x: int(x)
-)
-
-# --- RMS deviation for each diffraction order ---
-print("RMS deviation for each diffraction order:")
+unique_orders = sorted(list(set(o[:-1] for o in orders)), key=lambda x: int(x))
 
 rms_by_order = {}
-
 for order in unique_orders:
     indices = [i for i, o in enumerate(orders) if o.startswith(order)]
-
     gt = ground_truth[indices]
     meas = computed[indices]
-
     residuals = meas - gt
     rms = np.sqrt(np.mean(residuals ** 2))
-
     rms_by_order[order] = rms
 
-    print(f"Order {order}: RMS deviation = {rms:.3f} cm")
+# ========================== GLOBAL FONT CONFIGURATION ==========================
+plt.rcParams['font.family'] = 'sans-serif'
+plt.rcParams['font.sans-serif'] = ['Helvetica', 'Arial']
+plt.rcParams['mathtext.fontset'] = 'dejavusans'
 
+# ========================== FIGURE SETUP ==========================
+fig, ax = plt.subplots(figsize=(8.5, 6), dpi=300, layout='constrained')
 
-# --- Plotting ---
+# YOUR ORIGINAL COLOR DICTIONARY RESTORED EXACTLY
 order_colors = {
-    "-2": "#8080FF",   # light purple/blue
-    "-1": "#00FFFF",   # cyan
-    "0":  "#FF00FF",   # magenta
-    "1":  "#C8C800",   # yellow/olive
-    "2":  "#FF0000",   # red
-    "3":  "#00FF00",   # green
-    "4":  "#0000FF"    # blue
+    "-2": "#8080FF",
+    "-1": "#00FFFF",
+    "0":  "#FF00FF",
+    "1":  "#C8C800",
+    "2":  "#FF0000",
+    "3":  "#00FF00",
+    "4":  "#0000FF"
 }
 
-plt.figure(figsize=(11, 6), dpi=300)
+# --- Ideal 1:1 Reference Line ---
+min_val = min(np.min(ground_truth), np.min(computed)) - 5
+max_val = max(np.max(ground_truth), np.max(computed)) + 5
 
+ax.plot(
+    [min_val, max_val],
+    [min_val, max_val],
+    linestyle='--',
+    linewidth=1.0,
+    color='#777777',
+    label="Ideal 1:1 Line",
+    zorder=1
+)
+
+# --- Plot Fits and Data ---
 for order in unique_orders:
     color = order_colors[order]
-
     indices = [i for i, o in enumerate(orders) if o.startswith(order)]
 
     x = ground_truth[indices]
     y = computed[indices]
     yerr = errors[indices]
 
-    plt.errorbar(
+    # Plot linear regression line
+    model = LinearRegression().fit(x.reshape(-1, 1), y)
+    x_fit = np.linspace(min(x), max(x), 100)
+    y_fit = model.predict(x_fit.reshape(-1, 1))
+
+    ax.plot(
+        x_fit,
+        y_fit,
+        linestyle='-',
+        linewidth=1.2,
+        color=color,
+        zorder=2
+    )
+
+    # UNIFIED SHAPE STYLING:
+    # Uses a single circle ('o') but colors the face with your original hex color.
+    # A sleek dark-charcoal outline ('#222222') is added to make the markers pop.
+    ax.errorbar(
         x,
         y,
         yerr=yerr,
         fmt='o',
-        capsize=4,
+        capsize=3,
         color=color,
         ecolor=color,
-        markerfacecolor=color,
-        markeredgecolor='black',
-        markeredgewidth=0.6,
-        label=f"Order {order}"
+        elinewidth=1.0,
+        markersize=6.0,
+        markerfacecolor=color,       # Solid colored fill keeps things cohesive
+        markeredgecolor='#222222',   # Crisp dark border replaces the thick colored edge
+        markeredgewidth=0.8,
+        label=f"Order {order}",
+        zorder=3
     )
 
-    model = LinearRegression().fit(x.reshape(-1, 1), y)
+# ========================== AXIS FORMATTING ==========================
+ax.set_xlabel("Ground Truth Distance (cm)", fontsize=13, labelpad=8)
+ax.set_ylabel("Measured Distance (cm)", fontsize=13, labelpad=12)
 
-    x_fit = np.linspace(min(x), max(x), 100)
-    y_fit = model.predict(x_fit.reshape(-1, 1))
+ax.tick_params(axis="both", which="major", labelsize=10.5, width=0.8)
+for spine in ax.spines.values():
+    spine.set_linewidth(0.8)
 
-    plt.plot(
-        x_fit,
-        y_fit,
-        linestyle='-',
-        linewidth=2,
-        color=color
-    )
+ax.set_xlim(85, 180)
+ax.set_ylim(85, 180)
 
-# --- Optional 1:1 reference line ---
-#min_val = min(np.min(ground_truth), np.min(computed))
-#max_val = max(np.max(ground_truth), np.max(computed))
-#
-#plt.plot(
-#    [min_val, max_val],
-#    [min_val, max_val],
-#    'k--',
-#    linewidth=1.5,
-#    label="Ideal 1:1 Line"
-#)
+ax.grid(True, linestyle="--", alpha=0.4, color='#b0b0b0', linewidth=0.6)
 
-# ========================== RMS TEXT BOX ==========================
-rms_text = "\n".join([
-    f"Order {order}: RMS = {rms_by_order[order]:.2f} cm"
+# ========================== LEGEND & RMS TEXT BOX ==========================
+leg = ax.legend(
+    title="Diffraction Order",
+    fontsize=9,
+    title_fontsize=10.5,
+    loc="upper left",
+    frameon=True,
+    framealpha=0.9,
+    edgecolor='#b0b0b0'
+)
+leg.get_frame().set_linewidth(0.6)
+
+# Borderless structured box block anchored beautifully on the lower right workspace margin
+rms_text = "$\\mathbf{RMS Deviations:}$\n" + "\n".join([
+    f"Order {order}: {rms_by_order[order]:.2f} cm"
     for order in unique_orders
 ])
 
-plt.text(
-    0.98,
-    0.02,
+ax.text(
+    0.97,
+    0.03,
     rms_text,
-    transform=plt.gca().transAxes,
-    fontsize=10,
+    transform=ax.transAxes,
+    fontsize=9,
+    fontname="Arial",
+    color='#333333',
     verticalalignment="bottom",
     horizontalalignment="right",
+    linespacing=1.3,
     bbox=dict(
         facecolor="white",
-        edgecolor="black",
-        alpha=0.85
+        edgecolor="#b0b0b0",
+        linewidth=0.6,
+        alpha=0.9,
+        boxstyle='round,pad=0.5'
     )
 )
 
-# --- Formatting ---
-#lt.title(
-#   "Linear Regression Analysis for Distance at 7 Diffraction Orders",
-#   fontsize=25
-#
+# ========================== EXPORT ==========================
+fig.set_constrained_layout_pads(w_pad=4/72, h_pad=4/72, hspace=0, wspace=0)
 
+plt.savefig("Distance linear regression.png", dpi=600)
+plt.savefig("Distance linear regression.pdf", dpi=600)
 
-plt.xlabel(
-    "Ground Truth Distance (cm)",
-    fontsize=20
-)
-
-plt.ylabel(
-    "Measured Distance (cm)",
-    fontsize=20
-)
-
-plt.xticks(fontsize=14)
-plt.yticks(fontsize=14)
-
-plt.grid(True, alpha=0.3)
-
-plt.legend(
-    title="Diffraction Order",
-    fontsize=10,
-    title_fontsize=12,
-    loc="upper left",
-    frameon=True
-)
-
-plt.tight_layout()
 plt.show()

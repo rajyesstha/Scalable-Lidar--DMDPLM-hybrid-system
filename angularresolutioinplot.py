@@ -34,7 +34,7 @@ plt.legend(fontsize=12)
 
 # Annotate each point with the angular resolution value
 for i, (order, angle) in enumerate(zip(orders, angles)):
-    plt.text(order, angle - 0.015, f'{angle:.3f}', ha='center', va='top', fontsize=9)
+    plt.text(order, angle - 0.015, f'{angle:.3f}°', ha='center', va='top', fontsize=9)
 
 # Adjust layout to prevent label cutoff
 plt.tight_layout()

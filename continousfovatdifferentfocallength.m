@@ -14,7 +14,7 @@
 % figure;
 % hold on;
 % 
-% % Loop through focal lengths
+% % Loop through focal length
 % for f = 1:length(focal_lengths)
 %     focal_length = focal_lengths(f);
 % 
