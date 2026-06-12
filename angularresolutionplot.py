@@ -123,7 +123,7 @@ if SHOW_POINT_LABELS:
             f"{y:.3f}°",
             ha="center",
             va="bottom",
-            fontsize=7.2,
+            fontsize=10,
             color="0.25",
             clip_on=False
         )

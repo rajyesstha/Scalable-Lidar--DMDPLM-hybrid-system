@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm
 from scipy.ndimage import median_filter, label
+from pathlib import Path
 
 # === CONFIGURABLE PARAMETERS ===
 file_paths = [
@@ -37,7 +38,14 @@ slope, offset     = -1.9, 861
 c_adjust          = 0.15
 iqr_bounds        = (45, 55)
 
-# === HELPER FUNCTION (UNCHANGED) ===
+# === HELPER FUNCTIONS ===
+def extract_order(file_path):
+    try:
+        return int(Path(file_path).parts[-2])
+    except (ValueError, IndexError):
+        return None
+
+
 def extract_iqr_data(file_path):
     try:
         raw = np.loadtxt(file_path, dtype=str)
@@ -81,7 +89,14 @@ def extract_iqr_data(file_path):
     return data[(data >= q_low) & (data <= q_high)]
 
 # === PROCESS FILES ===
+orders = [extract_order(fp) for fp in file_paths]
 iqr_data_list = [extract_iqr_data(fp) for fp in file_paths]
+unique_orders = sorted({order for order in orders if order is not None})
+order_label = None
+if len(unique_orders) == 1:
+    order_label = f"$m$ = {unique_orders[0]}"
+elif len(unique_orders) > 1:
+    order_label = "$m$ = " + ", ".join(str(o) for o in unique_orders)
 
 # === PLOT CONFIGURATION FOR APPLIED OPTICS ===
 plt.rcParams['font.family'] = 'sans-serif'
@@ -128,7 +143,11 @@ for data, label_str, color in zip(iqr_data_list, labels, colors):
     # --- CLEAN, CENTERED INLINE ANNOTATIONS ---
     # Properly formats the labels directly above each peak center
     # Use explicit math-mode segments so matplotlib's mathtext parses correctly
-    annotation_text = "$\\mathbf{" + label_str + "}$\n" + f"$\\mu$ = {mu:.2f} cm\n" + f"$\\sigma$ = {sigma:.2f} cm"
+    annotation_text = (
+        "$\\mathbf{" + label_str + "}$\n"
+        + f"$\\mu$ = {mu:.2f} cm\n"
+        + f"$\\sigma$ = {sigma:.2f} cm"
+    )
     
     # Place text exactly at (mu), and slightly higher than the top of the curve peak (peak_y)
     # Using center alignment ensures it won't drift or collide sideways
@@ -137,15 +156,15 @@ for data, label_str, color in zip(iqr_data_list, labels, colors):
         peak_y + 0.3, 
         annotation_text, 
         color=color, 
-        fontsize=9.5, 
+        fontsize=14, 
         va='bottom', 
         ha='center',
         linespacing=1.2
     )
 
 # === PLOT WINDOW CROPPING & HEADROOM ADJUSTMENT ===
-ax.set_xlabel("Distance(cm)", fontsize=13, labelpad=6)
-ax.set_ylabel("Counts", fontsize=13, labelpad=-4)
+ax.set_xlabel("Distance (cm)", fontsize=20, labelpad=6)
+ax.set_ylabel("Counts", fontsize=20, labelpad=6)
 ax.tick_params(axis='both', which='major', labelsize=10.5)
 
 ax.set_xlim(plot_view_range)  
@@ -157,6 +176,23 @@ ax.set_ylim(0, max_y_value * 1.35)
 # Clean, lightweight grid layout suitable for publication templates
 ax.grid(True, linestyle='--', alpha=0.4, color='#b0b0b0', linewidth=0.6)
 
+if order_label is not None:
+    ax.text(
+        0.02,
+        0.96,
+        order_label,
+        transform=ax.transAxes,
+        fontsize=15,
+        va='top',
+        ha='left',
+        color='black',
+        bbox=dict(facecolor='white', alpha=0.75, edgecolor='none', boxstyle='round,pad=0.2')
+    )
+
 plt.tight_layout()
-plt.savefig('distance_distributions_journal.pdf', bbox_inches='tight', dpi=600)
-plt.show()
+order_suffix = ""
+if unique_orders:
+    order_suffix = f"_m{unique_orders[0]}" if len(unique_orders) == 1 else "_m" + "_".join(str(o) for o in unique_orders)
+plt.savefig(f'distance_distributions_journal{order_suffix}.svg', bbox_inches='tight', dpi=600)
+plt.savefig(f'Distance_distributions{order_suffix}.png', dpi=600)
+#plt.show()
