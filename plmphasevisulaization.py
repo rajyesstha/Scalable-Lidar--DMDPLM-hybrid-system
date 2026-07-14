@@ -86,6 +86,13 @@ show_phase_profile = True
 # True  = phase profile
 # False = binary CGH
 
+# Choose a colormap for phase profile visualization.
+# Examples: "viridis", "magma", "plasma", "inferno", "cividis".
+phase_cmap = "viridis"
+
+# Binary CGH should remain simple for clear binary contrast.
+binary_cmap = "gray"
+
 
 # ========================== LOCAL FUNCTIONS ==========================
 def make_index_map(cell_rows, cell_cols, gratingperiod, theta, thresholds_pct):
@@ -216,10 +223,11 @@ for r in range(3):
             top_label = f"Tile {tile_num[r, c]}: {int(theta)}°, Λ = {Lambda:.1f}"
 
         if show_phase_profile:
-            # gray_r makes 0 phase white and max phase black
+            # Use a heatmap colormap for phase profile visualization.
+            # Change `phase_cmap` above to any matplotlib colormap name.
             last_im = ax.imshow(
                 img,
-                cmap="gray_r",
+                cmap=phase_cmap,
                 vmin=0,
                 vmax=phase_max_pi,
                 interpolation="nearest"
@@ -227,7 +235,7 @@ for r in range(3):
         else:
             last_im = ax.imshow(
                 img,
-                cmap="gray",
+                cmap=binary_cmap,
                 vmin=0,
                 vmax=1,
                 interpolation="nearest"

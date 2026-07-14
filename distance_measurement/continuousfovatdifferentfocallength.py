@@ -112,7 +112,7 @@ ax.grid(True, linestyle='--', alpha=0.25, color='#b0b0b0', linewidth=0.5)
 
 # ========================== LEGEND STRUCTURE ==========================
 leg = ax.legend(
-    title=rf'$\mathbf{{\theta_i = {theta_i}^\circ\ (f = {focal_length}\text{{ mm}})}}$',
+    title=rf'$\mathbf{{\theta_{{inc}} = {theta_i}^\circ\ (f = {focal_length}\text{{ mm}})}}$',
     loc='upper right', 
     fontsize=9.0, 
     title_fontsize=10.0,
