@@ -5,6 +5,7 @@
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from matplotlib.ticker import FormatStrFormatter
 from pathlib import Path
 
@@ -30,19 +31,20 @@ SHOW_POINT_LABELS = True   # Set False for cleaner journal version
 # ========================== FONT / EXPORT CONFIG ==========================
 mpl.rcParams.update({
     "font.family": "sans-serif",
-    "font.sans-serif": ["Arial", "Helvetica", "DejaVu Sans"],
+    "font.sans-serif": ["Helvetica", "Arial", "DejaVu Sans"],
     "mathtext.fontset": "dejavusans",
 
-    "font.size": 9,
-    "axes.labelsize": 10,
-    "xtick.labelsize": 8.5,
-    "ytick.labelsize": 8.5,
+    "font.size": 10,
+    "axes.labelsize": 12,
+    "axes.titlesize": 11,
+    "xtick.labelsize": 10,
+    "ytick.labelsize": 10,
 
-    "axes.linewidth": 0.75,
-    "xtick.major.width": 0.75,
-    "ytick.major.width": 0.75,
-    "xtick.major.size": 3.5,
-    "ytick.major.size": 3.5,
+    "axes.linewidth": 0.8,
+    "xtick.major.width": 0.8,
+    "ytick.major.width": 0.8,
+    "xtick.major.size": 3.0,
+    "ytick.major.size": 3.0,
 
     "pdf.fonttype": 42,
     "ps.fonttype": 42,
@@ -50,34 +52,47 @@ mpl.rcParams.update({
 })
 
 # ========================== FIGURE SETUP ==========================
-# Wider than strict one-column, but much safer for labels and annotations.
-fig, ax = plt.subplots(figsize=(4.6, 3.0), dpi=600)
+fig, ax = plt.subplots(figsize=(5.4, 3.4), dpi=300, layout="constrained")
 
-# Manually control margins so labels never crop.
-fig.subplots_adjust(
-    left=0.16,
-    right=0.97,
-    bottom=0.18,
-    top=0.92
-)
+# Color palette aligned exactly with the regression figure style.
+order_colors = {
+    -2: "#8080FF",
+    -1: "#00FFFF",
+    0:  "#FF00FF",
+    1:  "#C8C800",
+    2:  "#FF0000",
+    3:  "#00FF00",
+    4:  "#0000FF",
+}
+marker_edge_color = "#222222"
+grid_color = "#b0b0b0"
 
 # ========================== PLOT ==========================
-ax.plot(
-    orders,
-    angles,
-    "-o",
-    color="black",
-    linewidth=1.1,
-    markersize=4.6,
-    markerfacecolor="white",
-    markeredgecolor="black",
-    markeredgewidth=1.0,
-    zorder=3
-)
+for i, order in enumerate(orders):
+    color = order_colors.get(int(order), "#4C72B0")
+
+    if i > 0:
+        ax.plot(
+            [orders[i - 1], order],
+            [angles[i - 1], angles[i]],
+            color="#888888",
+            linewidth=1.2,
+            zorder=2,
+        )
+
+    ax.scatter(
+        [order],
+        [angles[i]],
+        s=55,
+        color=color,
+        edgecolor=marker_edge_color,
+        linewidth=0.8,
+        zorder=3,
+    )
 
 # ========================== AXIS LABELS ==========================
-ax.set_xlabel(r"Diffraction order", labelpad=5)
-ax.set_ylabel(r"Angular resolution, $\theta_{\text{Nyq}}$ (deg)", labelpad=7)
+ax.set_xlabel(r"Diffraction order", fontsize=13, labelpad=8)
+ax.set_ylabel(r"Angular resolution, $\theta_{\text{Nyq}}$ (deg)", fontsize=13, labelpad=8)
 
 # Do NOT use a title for journal manuscript figures.
 # Put the title/explanation in the caption instead.
@@ -93,17 +108,21 @@ ax.set_yticks([0.15, 0.18, 0.21, 0.24])
 ax.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
 
 # ========================== GRID ==========================
+ax.set_axisbelow(True)
 ax.grid(
     axis="y",
-    linestyle=(0, (3, 3)),
-    linewidth=0.45,
-    color="0.82",
+    linestyle="--",
+    linewidth=0.6,
+    color=grid_color,
+    alpha=0.45,
     zorder=0
 )
 
 # ========================== SPINES AND TICKS ==========================
 ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
+for spine in [ax.spines["left"], ax.spines["bottom"]]:
+    spine.set_linewidth(0.8)
 
 ax.tick_params(
     axis="both",
@@ -111,20 +130,52 @@ ax.tick_params(
     direction="out",
     top=False,
     right=False,
-    pad=3
+    length=3.0,
+    pad=3,
+    colors="black"
 )
+
+# ========================== LEGEND ==========================
+legend_handles = [
+    Line2D(
+        [0],
+        [0],
+        marker="o",
+        linestyle="None",
+        color="white",
+        markerfacecolor=color,
+        markeredgecolor=marker_edge_color,
+        markeredgewidth=0.8,
+        markersize=5.5,
+        label=f"Order {order}",
+    )
+    for order, color in order_colors.items()
+]
+
+leg = ax.legend(
+    handles=legend_handles,
+    title="Diffraction Order",
+    loc="upper right",
+    frameon=True,
+    framealpha=0.95,
+    edgecolor="#b0b0b0",
+    fontsize=9,
+    title_fontsize=10,
+)
+leg.get_frame().set_linewidth(0.6)
 
 # ========================== ANNOTATIONS ==========================
 if SHOW_POINT_LABELS:
     for x, y in zip(orders, angles):
-        ax.text(
-            x,
-            y + 0.0045,
+        ax.annotate(
             f"{y:.3f}°",
+            xy=(x, y),
+            xytext=(0, 5),
+            textcoords="offset points",
             ha="center",
             va="bottom",
-            fontsize=10,
-            color="0.25",
+            fontsize=9,
+            color="#333333",
             clip_on=False
         )
 
