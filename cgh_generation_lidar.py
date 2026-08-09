@@ -11,31 +11,41 @@
 #   ramp coordinate  v = x*cos(t) + y*sin(t) = (j-cx)*cos(t) - (i-cy)*sin(t)
 #   ideal blaze      psi(i,j) = 2*pi*v/Lambda + phi0   (Lambda in PLM phase pixels)
 #
-# Quantisation
+# Quantisation (selected by QUANT_RULE)
 # ------------
-#   Full-2*pi ramp + circular NEAREST-NEIGHBOUR search over the measured level
-#   phases.  This replaces the old "ramp scaled to phi_max + ceiling threshold"
-#   rule, which rounded every cell UP to the next code and capped the achievable 
-#   blaze at phi_max instead of 2*pi.
+#   "neareest" : Full-2*pi ramp + circular NEAREST-NEIGHBOUR search over the measured level
+#                phases; dead-zone phases fold to the closer of P15 / P0
+#   "clip"     : same resetting sawtooth, but it SATURATE at P15 instead of folding.
+#   "lut"      : THRESHOLD_PCT used literally as decision boundaries on ramp position.
+#
+# The first two replace the old "ramp scaled to phi_max + ceiling threshold" rule, which rounded every cell UP to the next
+# code and capped the achievable blaze at phi_max instead of 2*pi
 #
 # Guaranteed symmetry (verified at runtime, both anchor modes):
 #   the level sequence along the grating vector for theta+180 is the exact
 #   reverse of the sequence for theta.
 # =============================================================================
 
+
+
 import csv
 import os
+
 
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 
+
 TWO_PI = 2.0 * np.pi
+
+
 
 
 # =============================================================================
 #  RUN CONFIGURATION  --  everything you normally touch lives in this block
 # =============================================================================
+
 
 # -----------------------------------------------------------------------------
 # 1. PHASE ANCHORING  --  uncomment exactly ONE
@@ -51,10 +61,14 @@ TWO_PI = 2.0 * np.pi
 #            that the panel window stays symmetric about it and theta / theta+180
 #            give identical efficiency.  Costs a few points versus "free".
 #
-# PHASE_ANCHOR = "free"
+
+
 PHASE_ANCHOR = "free"
 
+
 ANCHOR_LEVEL = 0          # code pinned to the ramp origin when PHASE_ANCHOR == "P0"
+
+
 
 
 # -----------------------------------------------------------------------------
@@ -78,9 +92,11 @@ ANCHOR_LEVEL = 0          # code pinned to the ramp origin when PHASE_ANCHOR == 
 #               This is the bench/lab rule 
 #               PHASE_ANCHOR is ignored (the LUT is anchored to the ramp itself).
 #
-QUANT_RULE = "lut"
-# QUANT_RULE = "nearest"
+QUANT_RULE = "nearest"
+# QUANT_RULE = "clip"
 # QUANT_RULE = "lut"
+
+
 
 
 # -----------------------------------------------------------------------------
@@ -101,6 +117,8 @@ LEVEL_PHASE_MODEL = "piston"
 # LEVEL_PHASE_MODEL = "full2pi"
 
 
+
+
 # -----------------------------------------------------------------------------
 # 2. STEERING ANGLES  --  uncomment exactly ONE (or write your own list)
 # -----------------------------------------------------------------------------
@@ -109,7 +127,10 @@ ANGLES_DEG = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0]      # 8 angle
 # ANGLES_DEG = list(np.arange(0.0, 360.0, 22.5))                       # 16 angles, 22.5 deg step
 # ANGLES_DEG = list(np.arange(0.0, 360.0, 10.0))                       # 36 angles, 10 deg step
 
+
 FLAT_ANGLES = set()   # e.g. {0.0} emits 0 deg as a flat state instead of a grating
+
+
 
 
 # -----------------------------------------------------------------------------
@@ -122,12 +143,15 @@ PERIODS = np.round(np.arange(1.0, 3.01, 0.1), 2)      # your original sweep (inc
 # PERIODS = [2.0, 2.5, 3.0, 4.0, 6.0, 8.0]            # sparse spot check
 
 
+
+
 # -----------------------------------------------------------------------------
 # 4. OUTPUT TOGGLES
 # -----------------------------------------------------------------------------
 # fmt: off
-SAVE_BMP          = True   # write one full-resolution CGH bitmap per angle x period
-SAVE_TILE_BMP     = True   # write the sixteen 20x20 tile-key bitmaps
+SAVE_BMP          = False   # write one full-resolution CGH bitmap per angle x period
+SAVE_TILE_BMP     = False   # write the sixteen 20x20 tile-key bitmaps
+
 
 DERIVE_COMPLEMENTS = True   # compute only theta < 180 and obtain theta+180 as rot180 of it.
                            # rot180 of a valid theta grating IS a valid theta+180 grating
@@ -143,18 +167,50 @@ CSV_MATRIX        = True    # CSV: write the NxN code matrix for EVERY angle x p
 MATRIX_SIZE       = 20      # N, the logged block size
 LOG_LAMBDAS       = [1.0, 1.4, 1.5,  2.0, 2.1, 2.5, 3.0]   # which periods get printed to console
 
-PLOT_FAR_FIELD    = "all"   # "off"   -> no far-field plots
+
+PLOT_FAR_FIELD    = "all"  # "off"   -> no far-field plots
                            # "cases" -> only SPECTRUM_CASES below
                            # "all"   -> one plot per angle x period (SLOW, many files)
-PLOT_PHASE_RAMP   = "all"   # "off"   -> no ramp plots
-                           # "cases" -> overview grid only (one panel per period)
-                           # "all"   -> overview grid + one detailed plot per period
-SPECTRUM_CASES    = [(0.0, 2.0), (0.0, 2.1),(0.0, 3.0), (45.0, 1.5), (45.0, 1.4), 
-                     (135.0, 1.5), (135.0, 1.4), (180.0, 2), (180.0, 2.1), (180.0, 3.0), 
-                     (225.0, 1.5), (225.0, 1.4), (270.0, 2), (270.0, 2.1), (315.0, 1.5), 
-                     (315.0, 1.4)]   # (theta, Lambda) pairs for which to plot the far-field spectrum
-SPECTRUM_N        = 256     # centred crop size used for the far-field FFT
+
+
+PLOT_GRID_COMPOSITE = True   # stack the GRID_SPOTS far fields into ONE image so every 
+                             # steered spot of the grid is visible at once, each target 
+                             # order circled and labelled with its efficiency. 
+GRID_SPECTRUM_N = 512        # crop size for the composite (bigger = sharper spots, slower)
+SPECTRUM_WINDOW = False      # apply a 2-D Hann window before the display FFT.
+                            # a hard-edged crop convolves every spot with the same sinc 
+                            # cross, which makes the spots look identical and stamped.
+                            # Display only -- all eta numbers are analytic, not FFT-derived.
+SPECTRUM_ENVELOPE = True      # multiply the displayed spectrum by the squre-mirror element
+                            # pattern sinc^2(f). WITHOUT this the plot is array-factor only 
+                            # (every pixel a point emitter) and all spots look equally bright, with it the relative
+                            # brightness is what a camera in the fourier plane would actually see.
+
+
+# the steering grid. (label, theta_deg, period_px); period None = flat / undiffracted.
+# the corners must use GRID_EDGE / sqrt(2) for a true square grid -- that puts them at the same f on both axes as the edges. 
+# A rounded 1.5 lands at 0.47140, ~ 1% off grid, and costs ~ 11 points of spot power.
+
+
+GRID_EDGE = 2.1                         # edge (E, N, W, S) of the square grid, in PLM pixels
+GRID_CORNER = GRID_EDGE / np.sqrt(2.0)  # corner of the square grid, in PLM pixels
+
+
+
+GRID_SPOTS = [
+    ("center", None, None),
+    ("E",    0.0, GRID_EDGE), ("N", 90.0, GRID_EDGE), 
+    ("W",  180.0, GRID_EDGE), ("S", 270.0, GRID_EDGE),
+    ("NE",  45.0, GRID_CORNER), ("NW", 135.0, GRID_CORNER),
+    ("SW", 225.0, GRID_CORNER), ("SE", 315.0, GRID_CORNER)
+]
+PLOT_PHASE_RAMP = "all"  # "off" -> no ramp plots, 
+                         # "cases" -> only SPECTRUM_CASES, 
+                         # "all" -> one plot per angle x period
+SPECTRUM_CASES = [(0.0, 2.0), (0.0, 3), (45.0, 2.5), (180.0,3)]
+SPECTRUM_N = 256         #centered crop size used for the far-field FFT
 # fmt: on
+
 
 
 # ========================== DEVICE / OPTICS CONFIG ==========================
@@ -162,16 +218,43 @@ SPECTRUM_N        = 256     # centred crop size used for the far-field FFT
 PLM_WIDTH           = 2716        # DMD-format bitmap width  (= 2 x phase pixels)
 PLM_HEIGHT          = 1600        # DMD-format bitmap height (= 2 x phase pixels)
 PIXEL_PITCH_UM      = 10.8        # phase-pixel pitch
-FILL_FACTOR         = 1.0         # LINEAR fill factor of the piston mirror (1.0 = ideal)
+FILL_FACTOR         = 0.92         # LINEAR fill factor of the piston mirror (1.0 = ideal)
+
 
 LAMBDA_NM           = 905.0       # operating wavelength
 MAX_DISPLACEMENT_NM = 296.25      # piston travel at code = 100 %
 
+
 N_OFFSETS           = 360         # offset search resolution ("free" anchor only)
 N_OFFSET_BINS       = 2048        # histogram resolution for the offset search
 
+
 FLAT_PHASE_LEVEL    = 0           # tile used for the "flat" state
 # fmt: on
+
+
+
+# ========================== CONFIG VALIDATION ==========================
+# Every switch above is a bare string that falls through to a default when misspelled,
+# and the output folder name is built from three of them -- so a typo would silently 
+# produce a confidenlty misspelled dataset. Fail loudly instead.
+# fmt : off
+_VALID_CHOICES = {
+    "PHASE_ANCHOR"      : ("free", "P0"),
+    "QUANT_RULE"        : ("nearest", "clip", "lut"),
+    "LEVEL_PHASE_MODEL" : ("piston", "full2pi"),
+    "PLOT_FAR_FIELD"    : ("off", "cases", "all"),
+    "PLOT_PHASE_RAMP"   : ("off", "cases", "all"),
+}
+# fmt on
+for _name, _allowed, in _VALID_CHOICES.items():
+    if globals()[_name] not in _allowed:
+        raise ValueError(f"{_name} = {globals()[_name]!r} is not one of {_allowed}")
+    if not 0 <= ANCHOR_LEVEL <=15:
+        raise ValueError(f"ANCHOR_LEVEL = {ANCHOR_LEVEL} must be a code index in between 0-15")
+    if len(PERIODS) == 0 or len(ANGLES_DEG) == 0:
+        raise ValueError("PERIODS and ANGLES_DEG must both be non-empty")
+                         
 
 # derived from QUANT_RULE -- do not edit
 #   The ramp origin must sit at the array CENTRE, otherwise the panel window is not
@@ -179,6 +262,8 @@ FLAT_PHASE_LEVEL    = 0           # tile used for the "flat" state
 #   infinite pattern and their efficiencies differ by up to 10 points at low-denominator
 #   periods (e.g. Lambda = 2.2 = 11/5).  "lut" keeps the corner to match the bench.
 ORIGIN = "corner" if QUANT_RULE == "lut" else "center"
+
+
 
 
 # ========================== PLM PHASE CALIBRATION ==========================
@@ -194,7 +279,10 @@ THRESHOLDS_PCT = np.array([
 ])
 # fmt: on
 
+
 PHASE_LEVELS_RAD_OVERRIDE = None  # e.g. np.array([...]) of 16 measured phases in radians
+
+
 
 
 # ========================== 2x2 BINARY BIT TILES ==========================
@@ -221,9 +309,12 @@ BIT_TILES = np.array([
 # fmt: on
 
 
+
+
 # ============================ PHASE LEVEL TABLE ============================
 class PhaseLevelTable:
    """Nearest-neighbour quantiser over a non-uniform, circular (mod 2*pi) level set."""
+
 
    def __init__(self, phases_rad):
        self.phase = np.mod(np.asarray(phases_rad, dtype=np.float64), TWO_PI)
@@ -237,10 +328,12 @@ class PhaseLevelTable:
        self._ext = np.concatenate([srt - TWO_PI, srt, srt + TWO_PI])
        self._edges = 0.5 * (self._ext[:-1] + self._ext[1:])
 
+
    def quantize(self, psi):
        """psi (any shape, radians) -> level index whose phase is circularly closest."""
        k = np.searchsorted(self._edges, np.mod(psi, TWO_PI), side="left")
        return self.order[np.mod(k, self.n)]
+
 
    def quantize_clipped(self, psi):
        """Nearest level WITHOUT wrap-around: anything above the top code saturates there
@@ -248,13 +341,17 @@ class PhaseLevelTable:
        k = np.searchsorted(self._mid, np.clip(psi, self.phi_min, self.phi_max), side="left")
        return self.order[np.clip(k, 0, self.n - 1)]
 
+
    def realized(self, idx):
        return self.phase[idx]
+
 
    def max_quantization_error(self):
        srt = np.sort(self.phase)
        gaps = np.diff(np.concatenate([srt, [srt[0] + TWO_PI]]))
        return 0.5 * gaps.max()
+
+
 
 
 def build_phase_levels():
@@ -271,11 +368,14 @@ def build_phase_levels():
    return disp, raw, PhaseLevelTable(raw)
 
 
+
+
 # ============================== GEOMETRY ==============================
 def direction_cosines(theta_deg, tol=1e-12):
    """cos/sin with cardinal-angle residues snapped to exact 0 / +-1, and angles in
    [180, 360) derived by explicit negation of their complement.
 
+   
    Two reasons: sin(180 deg) evaluates to 1.22e-16 rather than 0, which makes any
    threshold rule flip whole stripes at the sawtooth wrap; and cos(225 deg) is not
    bit-identical to -cos(45 deg), which leaves a ~1e-3 efficiency gap between
@@ -291,6 +391,36 @@ def direction_cosines(theta_deg, tol=1e-12):
    return (-c, -s) if flip else (c, s)
 
 
+
+
+def fold_to_first_zone(f):
+    """Fold a spatial frequency into the sampled first zone [-0.5, 0.5].
+
+
+    f - round(f) is wrong at the zone edge: numpy rounds half to even, so f = +0.5 maps to itself, but the sampled
+    grid only carries -0.5 (fftshit bin 0). The target marker then lands on teh opposite edge of the plot from the spot it is
+    suppsed to circle."""
+    return np.mod(f + 0.5, 1.0) - 0.5
+
+
+
+
+def freq_extent(n):
+    """imshow extent for an fftshift-ed n x n spectrum.
+    
+    
+    extent gives the OUTER edge of the image, not the bin centers, so it has to be the 
+    frequency axis widened by half a bin -- otherwise every analytic marker sits half a 
+    bin away from the data it annotates."""
+    f = np.fft.fftshift(np.fft.fftfreq(n))
+    h = 0.5 / n
+    edge_low = float(f[0] - h)
+    edge_high = float(f[-1] + h)
+    return [edge_low, edge_high, edge_low, edge_high]
+
+
+
+
 def ramp_coordinate(rows, cols, theta_deg, origin=None):
    """v(i, j) = (j - cx) cos(t) - (i - cy) sin(t)   [units: phase pixels]"""
    origin = ORIGIN if origin is None else origin
@@ -304,22 +434,23 @@ def ramp_coordinate(rows, cols, theta_deg, origin=None):
    return j * ct - i * st
 
 
-def make_index_map(v, period, table, shift=0.0):
-   """Wrapped blaze + circular nearest-neighbour quantisation."""
-   return table.quantize(TWO_PI * np.mod(v / period + shift, 1.0)).astype(np.uint8)
 
 
 def make_index_map_lut(v, period):
-   """Lab LUT rule: THRESHOLDS_PCT are decision boundaries on the ramp POSITION n,
-   where n sweeps 0 -> 100 % across one grating period.
+    """ Lab LUT rule: THRESHOLDS_PCT are decision boundaries on the ramp POSITION n, where n sweeps 0 -> 100 % across one gratiing 
+    period. 
 
-       n <  THRESHOLDS_PCT[0]                      -> P0
-       THRESHOLDS_PCT[k-1] <= n < THRESHOLDS_PCT[k] -> Pk
 
-   This is the rule the original script implemented and the one used on the bench."""
-   n = np.mod(100.0 * v / period, 100.0)
-   k = np.searchsorted(THRESHOLDS_PCT, n, side="right")
-   return np.clip(k, 0, THRESHOLDS_PCT.size - 1).astype(np.uint8)
+    n < THRESHOLDS_PCT[0]                        -> P0
+    THRESHOLDS_PCT[k-1] <= n < THRESHOLDS_PCT[k] -> Pk
+
+
+    This is the rule the original script impletmented and the one used on the bench."""
+    n = np.mod(100.0 * v / period, 100.0)
+    k = np.searchsorted(THRESHOLDS_PCT, n, side="right")
+    return np.clip(k, 0, THRESHOLDS_PCT.size - 1).astype(np.uint8)
+
+
 
 
 def ramp_phase(v, period, table, shift=0.0):
@@ -334,9 +465,14 @@ def ramp_phase(v, period, table, shift=0.0):
    return psi + table.phi_min if QUANT_RULE == "clip" else psi
 
 
+
+
+
 def make_index_map(v, period, table, shift=0.0):
    """Wrapped blaze + circular nearest-neighbour quantisation."""
    return table.quantize(TWO_PI * np.mod(v / period + shift, 1.0)).astype(np.uint8)
+
+
 
 
 def make_index_map_clip(v, period, table, shift=0.0):
@@ -348,6 +484,8 @@ def make_index_map_clip(v, period, table, shift=0.0):
    return table.quantize_clipped(psi).astype(np.uint8)
 
 
+
+
 def build_index_map(v, period, table, shift=0.0):
    """Single dispatch point for QUANT_RULE."""
    if QUANT_RULE == "lut":
@@ -357,8 +495,12 @@ def build_index_map(v, period, table, shift=0.0):
    return make_index_map(v, period, table, shift)
 
 
+
+
 # retained under the old name so existing call sites keep working
 make_index_map_legacy = make_index_map_lut
+
+
 
 
 def index_map_to_bitmap(idx_map, tiles=BIT_TILES):
@@ -367,12 +509,16 @@ def index_map_to_bitmap(idx_map, tiles=BIT_TILES):
    return tiles[idx_map].transpose(0, 2, 1, 3).reshape(2 * r, 2 * c)
 
 
+
+
 # ============================== EFFICIENCY ==============================
 def grating_efficiency(idx_map, v, period, table):
    """Power fraction into the target plane wave: |<exp(i(phi_real - phi_ideal))>|^2.
    Exact for non-integer periods (unlike an FFT bin)."""
    err = table.realized(idx_map) - TWO_PI * v / period
    return float(np.cos(err).mean() ** 2 + np.sin(err).mean() ** 2)
+
+
 
 
 def order_degeneracy(period, theta_deg, tol=1e-9):
@@ -390,11 +536,16 @@ def order_degeneracy(period, theta_deg, tol=1e-9):
    return 2 if degenerate else 1
 
 
+
+
+
 def pixel_envelope(period, theta_deg, fill=FILL_FACTOR):
    """Square-mirror aperture envelope at the target order (also caps eta at fill^2)."""
    ct, st = direction_cosines(theta_deg)
    fx, fy = ct / period, st / period
    return float(fill**2 * np.sinc(fill * fx) ** 2 * np.sinc(fill * fy) ** 2)
+
+
 
 
 def quantize_for_rule(table, psi):
@@ -405,9 +556,12 @@ def quantize_for_rule(table, psi):
    return table.quantize(psi)
 
 
+
+
 def optimise_shift(v, period, table, n_shifts=N_OFFSETS, n_bins=N_OFFSET_BINS):
    """Best lateral shift of the grating, in fractions of a period.
 
+   
    A lateral shift does not change the far-field intensity of an ideal grating, but it
    does change which pixels land where on the ramp, and therefore which codes get used.
    With 16 non-uniformly spaced levels that is worth a few points. O(N) + O(n_shifts*n_bins).
@@ -417,6 +571,7 @@ def optimise_shift(v, period, table, n_shifts=N_OFFSETS, n_bins=N_OFFSET_BINS):
    w = np.exp(-1j * TWO_PI * u)
    S = (np.bincount(b, weights=w.real, minlength=n_bins)
         + 1j * np.bincount(b, weights=w.imag, minlength=n_bins))
+
 
    u_c = (np.arange(n_bins) + 0.5) / n_bins
    shifts = np.arange(n_shifts) / n_shifts
@@ -428,30 +583,47 @@ def optimise_shift(v, period, table, n_shifts=N_OFFSETS, n_bins=N_OFFSET_BINS):
    return float(shifts[int(np.argmax(eta))])
 
 
+
+
 def resolve_shift(theta, period, v, table, cache):
    """Shift used for a given (theta, Lambda). Cached per (theta mod 180, Lambda) so that
    complementary angles always share it and stay exact mirrors of each other.
 
+   
    In 'clip' mode the ramp base is phi(P0) by construction, so the ramp always starts at
    P0 no matter what the shift is -- PHASE_ANCHOR is therefore irrelevant there and the
-   shift is always optimised.  In 'nearest' mode PHASE_ANCHOR == "P0" pins it to zero."""
+   shift is always optimised.  In 'nearest' mode PHASE_ANCHOR == "P0" pins the ramp 
+   origin to code P{ANCHOR_LEVEL} instead of optimizing."""
    if QUANT_RULE == "lut":
        return 0.0
    if QUANT_RULE == "nearest" and PHASE_ANCHOR == "P0":
-       return 0.0
+       # put the anchor code's phase exactly at the ramp origin, so the ramp really
+       # starts on P{ANCHOR_LEVEL} rather than merely landing near it by accident.
+       return float(table.phase[ANCHOR_LEVEL] / TWO_PI)
    key = (round(theta % 180.0, 6), float(period))
    if key not in cache:
        cache[key] = optimise_shift(v, period, table)
    return cache[key]
 
 
-def alias_info(period):
-   """Sampled-grid aliasing: f = 1/Lambda folds into [-0.5, 0.5)."""
-   f = 1.0 / period
-   f_alias = f - np.round(f)
-   ok = abs(f) <= 0.5
-   eff_period = np.inf if f_alias == 0 else 1.0 / abs(f_alias)
-   return ok, eff_period, bool(f_alias < 0)
+
+
+def alias_info(period, theta_deg):
+   """Sampled-grid aliasing. The Nyquist test is PER COMPONENT, not on 1/Lambda:
+   a 45 deg grating at Lambda = 1.5 has fx = fy = 0.471 < 0.5 and is perfectly valid, while the same period at 
+   0 deg has fx = 0.667 and aliases. A square steering grid relies on exactly this -- its corner spots need
+   Lambda_axial / sqrt(2) to land at the same f on both axes as the edge spots."""
+   ct, st = direction_cosines(theta_deg)
+   fx, fy = ct / period, st / period
+   ok = abs(fx) <= 0.5 + 1e-12 and abs(fy) <= 0.5 + 1e-12
+   fxa, fya = fold_to_first_zone(fx), fold_to_first_zone(fy)
+   mag = float(np.hypot(fxa, fya))
+   eff_period = np.inf if mag == 0 else 1.0 / mag
+   # at the zone edge the +1 and -1 order coicide, so "reversed" carries no meaning
+   rev = False if order_degeneracy(period, theta_deg) == 2 else bool(fxa * fx + fya * fy < 0)
+   return ok, eff_period, rev
+
+
 
 
 def steering_deg(period):
@@ -459,16 +631,23 @@ def steering_deg(period):
    return float(np.degrees(np.arcsin(s))) if abs(s) <= 1.0 else float("nan")
 
 
+
+
 # ============================= SYMMETRY TEST =============================
-def symmetry_report(table, half=400):
+def symmetry_report(table, rows, cols, cache, half=400):
    """Anchor-independent: the level sequence along the grating vector for theta+180
-   must be the exact reverse of the sequence for theta.  Also checks the 2-D
-   rot180 / flipud relations when the ramp origin is at the array centre."""
+   must be the exact reverse of the sequence for theta. 
+    
+
+   rows/cols and the shared shift cache come from the caller so that test uses the SAME
+   shifts as the patterns that actually get written -- optimising the shift on a 
+   different array size would validate a pattern that is never emitted."""
    lines, worst = [], 0
    v_line = np.arange(-half, half + 1, dtype=np.float64)
    for theta in [0.0, 45.0, 90.0, 135.0]:
+       v_full = ramp_coordinate(rows, cols, theta)
        for period in [2.0, 2.3, 3.0]:
-           off = resolve_shift(theta, period, ramp_coordinate(160, 240, theta), table, {})
+           off = resolve_shift(theta, period, v_full, table, cache)
            fwd = build_index_map(v_line[None, :], period, table, off)[0]
            rev = build_index_map(-v_line[None, :], period, table, off)[0]
            bad = int(np.count_nonzero(rev != fwd[::-1]))
@@ -478,10 +657,13 @@ def symmetry_report(table, half=400):
    return lines, worst
 
 
+
+
 # ================================ PLOTS ================================
 def plot_calibration(disp_nm, phase_raw, table, outdir):
    fig = plt.figure(figsize=(13, 5), dpi=150)
    fig.suptitle("PLM phase-level calibration", fontweight="bold")
+
 
    ax = fig.add_subplot(1, 3, 1)
    ax.plot(np.arange(16), phase_raw / np.pi, "o-", label="level phase")
@@ -490,10 +672,12 @@ def plot_calibration(disp_nm, phase_raw, table, outdir):
    ax.set_title(f"span = {phase_raw.max()/np.pi:.3f}$\\pi$ @ {LAMBDA_NM:.0f} nm")
    ax.grid(alpha=.3); ax.legend(fontsize=8)
 
+
    ax = fig.add_subplot(1, 3, 2)
    ax.plot(np.arange(16), disp_nm, "s-", c="g")
    ax.set_xlabel("phase code Pk"); ax.set_ylabel("piston displacement [nm]")
    ax.set_title("displacement"); ax.grid(alpha=.3)
+
 
    ax = fig.add_subplot(1, 3, 3, projection="polar")
    srt = np.sort(table.phase)
@@ -504,10 +688,13 @@ def plot_calibration(disp_nm, phase_raw, table, outdir):
    ax.set_title(f"level coverage on the unit circle\nmax quant. error = "
                 f"{table.max_quantization_error():.3f} rad", fontsize=9)
 
+
    fig.tight_layout()
    path = os.path.join(outdir, "Phase_Level_Calibration.png")
    fig.savefig(path, dpi=200); plt.close(fig)
    return path
+
+
 
 
 def plot_tile_key(phase_raw, outdir):
@@ -527,6 +714,8 @@ def plot_tile_key(phase_raw, outdir):
    return path
 
 
+
+
 def plot_efficiency(records, outdir):
    angles = sorted({r["theta"] for r in records})
    periods = sorted({r["period"] for r in records})
@@ -536,6 +725,7 @@ def plot_efficiency(records, outdir):
        a, p = angles.index(r["theta"]), periods.index(r["period"])
        g[a, p], t[a, p] = r["eta_grating"], r["eta_total"]
        fr[a, p], lg[a, p] = r["eta_free"], r["eta_legacy"]
+
 
    fig, axes = plt.subplots(1, 2, figsize=(14, 5.5), dpi=150)
    fig.suptitle(f"Diffraction efficiency into the +1 (target) order   "
@@ -555,6 +745,7 @@ def plot_efficiency(records, outdir):
    p1 = os.path.join(outdir, "Diffraction_Efficiency_vs_Period.png")
    fig.savefig(p1, dpi=200); plt.close(fig)
 
+
    fig, ax = plt.subplots(figsize=(11, 4.5), dpi=150)
    im = ax.imshow(100 * g, aspect="auto", origin="lower", cmap="viridis", vmin=0, vmax=100,
                   extent=[periods[0] - .05, periods[-1] + .05, -0.5, len(angles) - 0.5])
@@ -565,6 +756,7 @@ def plot_efficiency(records, outdir):
    fig.tight_layout()
    p2 = os.path.join(outdir, "Diffraction_Efficiency_Heatmap.png")
    fig.savefig(p2, dpi=200); plt.close(fig)
+
 
    fig, ax = plt.subplots(figsize=(8.5, 5), dpi=150)
    ax.plot(periods, 100 * np.nanmean(lg, axis=0), "s--", c="crimson",
@@ -585,6 +777,8 @@ def plot_efficiency(records, outdir):
    return p1, p2, p3
 
 
+
+
 def _ramp_profile(period, table, shift, n_periods=2):
    """Sampled pixel positions over n_periods, with the ideal and realised phase."""
    n_px = max(int(np.ceil(n_periods * period)) + 1, 6)
@@ -595,29 +789,53 @@ def _ramp_profile(period, table, shift, n_periods=2):
    return x, idx, realised, demanded
 
 
+
+
+# what happens to a sample whose demanded pahse sits above P15 depends on the rule:
+# only 'clip' truncates. 'nearest' folds it to the circularly closer to P15/P0 --
+# usually P0 -- 'lut' never builds a phase ramp, so nothing is reachable.
+# fmt: off
+_DEAD_ZONE_LABEL = {"clip": "truncated at P15", "nearest": "dead zone -> folded"}
+_DEAD_ZONE_WORD  = {"clip": "truncated", "nearest": "folded", "lut": "n/a"}
+# fmt: on
+
+
+def _dead_zone_mask(demanded, table):
+    """Samples the device cannot reach. Always empty for "lut", which has no phase ramp."""
+    if QUANT_RULE == "lut":
+        return np.zeros(np.shape(demanded), dtype=bool)
+    return demanded > table.phi_max
+
+
+
+
 def _draw_ramp(ax, period, table, shift, show_levels=True):
    x, idx, realised, demanded = _ramp_profile(period, table, shift)
    t = np.linspace(0, x[-1], 2000)
    demand_t = ramp_phase(t, period, table, shift)
+
 
    # region the device physically cannot reach -- the ONLY place truncation may occur
    ax.axhspan(table.phi_max / np.pi, 2.05, color="crimson", alpha=.08, zorder=0)
    ax.plot(t, demand_t / np.pi, "--", c="0.55", lw=1, label="demanded blaze")
    ax.step(x, realised / np.pi, where="mid", c="seagreen", lw=1.8, label="realised")
 
-   clipped = demanded > table.phi_max
-   ax.plot(x[~clipped], realised[~clipped] / np.pi, "o", c="seagreen", ms=4)
-   if clipped.any():
-       ax.plot(x[clipped], realised[clipped] / np.pi, "o", c="crimson", ms=5,
-               label="truncated at P15")
+
+   flagged = _dead_zone_mask(demanded, table)
+   ax.plot(x[~flagged], realised[~flagged] / np.pi, "o", c="seagreen", ms=4)
+   if flagged.any():
+       ax.plot(x[flagged], realised[flagged] / np.pi, "o", c="crimson", ms=5,
+                label=_DEAD_ZONE_LABEL.get(QUANT_RULE, "unreachable"))
    ax.axhline(table.phi_max / np.pi, c="crimson", ls=":", lw=1.2,
-              label=f"P15 = {table.phi_max/np.pi:.3f}$\\pi$")
+               label=f"P15 = {table.phi_max/np.pi:.3f}$\\pi$")
    if show_levels:
        for p in table.sorted_phase:
-           ax.axhline(p / np.pi, c="0.9", lw=.6, zorder=0)
+           ax.axhline(p / np.pi, c="0.9", lw="0.6", zorder=0)
    ax.set_ylim(-0.05, 2.05)
-   ax.set_xlim(0, x[-1])
-   return idx, clipped
+   ax.set_xlim(0,x[-1])
+   return idx, flagged
+
+
 
 
 def plot_phase_ramps(table, outdir, shift_for):
@@ -625,6 +843,7 @@ def plot_phase_ramps(table, outdir, shift_for):
        return []
    periods = [float(p) for p in PERIODS]
    paths = []
+
 
    ncol = 4
    nrow = int(np.ceil(len(periods) / ncol))
@@ -634,9 +853,9 @@ def plot_phase_ramps(table, outdir, shift_for):
                 f"{LEVEL_PHASE_MODEL}]", fontweight="bold")
    for k, period in enumerate(periods):
        ax = axes[k // ncol, k % ncol]
-       idx, clipped = _draw_ramp(ax, period, table, shift_for(period), show_levels=False)
+       idx, flagged = _draw_ramp(ax, period, table, shift_for(period), show_levels=False)
        ax.set_title(f"$\\Lambda$ = {period:g} px   ({len(np.unique(idx))} codes, "
-                    f"{100*clipped.mean():.0f} % truncated)", fontsize=9)
+                    f"{100*flagged.mean():.0f} % truncated)", fontsize=9)
        ax.tick_params(labelsize=7)
        if k % ncol == 0:
            ax.set_ylabel("phase [$\\pi$ rad]", fontsize=8)
@@ -648,15 +867,17 @@ def plot_phase_ramps(table, outdir, shift_for):
    fig.savefig(p, dpi=160); plt.close(fig)
    paths.append(p)
 
+
    if PLOT_PHASE_RAMP == "all":
        for period in periods:
            fig, ax = plt.subplots(figsize=(7.5, 4.2), dpi=140)
-           idx, clipped = _draw_ramp(ax, period, table, shift_for(period))
+           idx, flagged = _draw_ramp(ax, period, table, shift_for(period))
            codes = " ".join(f"P{k}" for k in idx[:min(len(idx), 12)])
            ax.set_xlabel("position along grating vector [PLM pixels]")
            ax.set_ylabel("phase [$\\pi$ rad]")
            ax.set_title(f"Phase ramp   $\\Lambda$ = {period:g} px   [{QUANT_RULE}]   "
-                        f"{100*clipped.mean():.0f} % of samples truncated\ncodes: {codes}",
+                        f"{100*flagged.mean():.0f} % of samples "
+                        f"{_DEAD_ZONE_WORD[QUANT_RULE]}\ncodes: {codes}",
                         fontweight="bold", fontsize=10)
            ax.grid(alpha=.25); ax.legend(fontsize=8, loc="lower right")
            fig.tight_layout()
@@ -665,6 +886,126 @@ def plot_phase_ramps(table, outdir, shift_for):
            fig.savefig(q, dpi=160); plt.close(fig)
            paths.append(q)
    return paths
+
+
+
+
+def element_pattern(n, fill = FILL_FACTOR):
+    """Square_mirror element pattern |E(f)|^2 = sinc^2(fill * f_x) * sinc^2(fill * f_y) over the displayed frquency plane.
+    This is the factor that makes steered spots dimmer than the undiffracted one."""
+    f = np.fft.fftshift(np.fft.fftfreq(n))
+    ex = fill * np.sinc(fill * f) ** 2
+    return np.outer(ex, ex)
+
+
+
+
+def spectrum_of(phi):
+    """Far-field power of a phase patch, for DISPLAY.
+    Rows are flipped so the vertical axis is +f_y. Returns POWER, 
+    already including the element pattern when SPECTRUM_ENVELOPE is on."""
+    field = np.exp(1j * phi[::-1, :])  # flip row axis to match +y up
+    if SPECTRUM_WINDOW:
+        wr = np.hanning(phi.shape[0])[:, None]
+        wc = np.hanning(phi.shape[1])[None, :]
+        field = field * (wr * wc)
+    pw = np.abs(np.fft.fftshift(np.fft.fft2(field))) / phi.size ** 2
+    if SPECTRUM_ENVELOPE and phi.shape[0] == phi.shape[1]:
+        pw = pw * element_pattern(phi.shape[0])
+    return pw
+
+
+
+
+def pattern_for(theta, period, table, rows, cols, cache):
+    """Index map for one steering direction, honouring DERIVE_COMPLEMENTS."""
+    if DERIVE_COMPLEMENTS and theta % 360.0 >= 180.0:
+        base = (theta - 180.0) % 360.0
+        vb = ramp_coordinate(rows, cols, base)
+        return np.rot90(build_index_map(vb, period, table, 
+                                        resolve_shift(base, period, vb, table, cache)), 2)
+    v = ramp_coordinate(rows, cols, theta)
+    return build_index_map(v, period, table, resolve_shift(theta, period, v, table, cache))
+
+
+
+
+def plot_grid_composite(table, rows, cols, outdir, cache):
+    """Incoherent stack of every GRID_SPOTS far field in one image.
+    
+    
+    The spots are written as separate frames on the PLM, so their intensities add --
+    this is what a time-averaged camera at the Fourier Plane would record."""
+    if not PLOT_GRID_COMPOSITE:
+        return None
+    n = GRID_SPECTRUM_N
+    r0, c0 = rows // 2 - n // 2, cols // 2 - n // 2
+    stack = np.zeros((n, n))
+    marks, table_rows = [], []
+
+
+    for label, theta, period in GRID_SPOTS:
+        if period is None:                              # Flat / undiffracted center
+            idx = np.full((rows, cols), FLAT_PHASE_LEVEL, dtype=np.uint8)
+            eta_g, env, split, fxa, fya = 1.0, 1.0, 1, 0.0, 0.0
+            steer = 0.0
+        else:
+            idx = pattern_for(theta, period, table, rows, cols, cache)
+            v = ramp_coordinate(rows, cols, theta)
+            eta_g = grating_efficiency(idx, v, period, table)
+            env = pixel_envelope(period, theta)
+            split = order_degeneracy(period, theta)
+            ct, st = direction_cosines(theta)
+            fx, fy = ct / period, st / period
+            fxa, fya = fx - np.round(fx), fy - np.round(fy)
+            steer = steering_deg(period)
+
+
+        phi = table.realized(idx[r0:r0 + n, c0:c0 + n])
+        stack += spectrum_of(phi)
+
+
+        eta_tot = eta_g * env / split
+        marks.append((label, fxa, fya, eta_tot, split))
+        table_rows.append((label, theta, period, eta_g, env, split, eta_tot, steer))
+
+
+    img = 10 * np.log10(np.maximum(stack / max(stack.max(), 1e-12), 1e-6))
+    fig, ax = plt.subplots(figsize=(8.2, 7.4), dpi=150)
+    m = ax.imshow(img, cmap="inferno", vmin=-45, vmax=0, origin = "lower", 
+                  extent =freq_extent(n))
+    for label, fx, fy, eta, split in marks:
+        ax.plot(fx, fy, "o", mfc="none", mec="cyan", ms=17, mew=1.6)
+        dy = 34 if fy < 0 else -34              # keep the label inside the axes
+        va = "bottom" if fy < 0 else "top"
+        ax.annotate(f"{label}\n{100*eta:.1f} %", xy = (fx, fy), xytext = (0,  dy), 
+                    textcoords = "offset points", ha = "center", va = va, color="cyan",
+                    fontsize=8, fontweight="bold",
+                    bbox=dict(boxstyle="round, pad=0.22", fc="black", ec = "cyan", alpha=0.7))
+    ax.set_xlabel("$f_x$ [cycles/pixel]"); ax.set_ylabel("$f_y$ [cycles/pixel]")
+    ax.set_title(f"Steering grid, stacked far field [{QUANT_RULE} / {LEVEL_PHASE_MODEL}]\n"
+                f"circles = target order, label = $\\eta_{{total}}$",
+                fontweight="bold", fontsize=10)
+    fig.colorbar(m, ax=ax, label="dB (normalised to brightest spot)")
+    fig.tight_layout()
+    path = os.path.join(outdir, "Grid_Composite_FarField.png")
+    fig.savefig(path, dpi=200); plt.close(fig)
+
+
+    print("\n STEERING GRID")
+    print(f" {'spot':>7} {'theta':>6} {'Lambda':>8} {'eta_grat':>9} {'envel':>7} "
+           f"{'split':>6} {'eta_tot':>8} {'steer':>7}")
+    for lab, th, pe, g, e, s, t, st_ in table_rows:
+        th_s = "flat" if th is None else f"{th:g}"
+        pe_s = "-" if pe is None else f"{pe:.4f}"
+        print(f" {lab:>7} {th_s:>6} {pe_s:>8} {100*g:>8.1f}% {100*e:>6.1f}% {s:>6} "
+              f" {100*t:>7.1f}% {st_:>6.2f}d")
+    steered = [t for lab, th, pe, g, e, s, t, st_ in table_rows if pe is not None]
+    print(f" --> steered spots: mean {100*np.mean(steered):.1f} % "
+            f"  min {100*np.min(steered):.1f} %  max {100*np.max(steered):.1f} %")
+    return path
+
+
 
 
 def plot_far_field(table, rows, cols, outdir, cache):
@@ -676,38 +1017,63 @@ def plot_far_field(table, rows, cols, outdir, cache):
    else:
        cases = SPECTRUM_CASES
 
+
    paths, n = [], SPECTRUM_N
    for theta, period in cases:
        v = ramp_coordinate(rows, cols, theta)
-       off = resolve_shift(theta, period, v, table, cache)
-       idx = build_index_map(v, period, table, off)
+       # pattern_for hoours DERIVE_COMPLEMENTS, so this plots the map that is actually 
+       # written for theta >= 180 instead of an independently recomputed one
+       idx = pattern_for(theta, period, table, rows, cols, cache)
        r0, c0 = rows // 2 - n // 2, cols // 2 - n // 2
        phi = table.realized(idx[r0:r0 + n, c0:c0 + n])
        # rows run downward in array space but +y points UP, so flip the row axis before
        # the transform. Without this the vertical frequency axis is -f_y and the target
        # marker lands mirrored about f_y = 0 for every non-horizontal grating.
-       spec = np.fft.fftshift(np.fft.fft2(np.exp(1j * phi[::-1, :]))) / phi.size
-       img = 10 * np.log10(np.maximum(np.abs(spec) ** 2, 1e-12))
+       pw = spectrum_of(phi)
+       img = 10 * np.log10(np.maximum(pw / max(pw.max(), 1e-12), 1e-6))
+
 
        fig, ax = plt.subplots(figsize=(6, 5.4), dpi=150)
        m = ax.imshow(img, cmap="inferno", vmin=-50, vmax=0, origin="lower",
-                     extent=[-0.5, 0.5, -0.5, 0.5])
+                     extent=freq_extent(n))
+
 
        ct, st = direction_cosines(theta)
        fx, fy = ct / period, st / period
        fxa, fya = fx - np.round(fx), fy - np.round(fy)
-       ax.plot(fxa, fya, "o", mfc="none", mec="cyan", ms=14, mew=1.6, label="target order")
 
-       # sanity annotation: where the brightest non-DC lobe actually sits
+
+       eta_g = grating_efficiency(idx, v, period, table)
+       env = pixel_envelope(period, theta)
+       split = order_degeneracy(period, theta)
+       eta_tot = eta_g * env / split
+
+
+       ax.plot(fxa, fya, "o", mfc="none", mec="cyan", ms=16, mew=1.8,
+               label="+1 order (target)")
+       ax.annotate(f"+1\n{100*eta_tot:.1f} %", xy=(fxa, fya),
+                   xytext=(10,10), textcoords="offset points", color="cyan",
+                   fontsize=9, fontweight="bold", 
+                   bbox=dict(boxstyle="round, pad=.25", fc="black", ec="cyan", alpha=0.65))
+
+
+       # sanity annotation: where the brightest non-DC lobe actually sits.
+       # img is already materialized and spectrum_of always returns a fresh array,
+       # so pw can be zeroed in place.
        f_ax = np.fft.fftshift(np.fft.fftfreq(n))
-       pw = np.abs(spec) ** 2
        pw[n // 2, n // 2] = 0.0                       # ignore DC
        pi_, pj_ = np.unravel_index(int(np.argmax(pw)), pw.shape)
        ax.plot(f_ax[pj_], f_ax[pi_], "+", c="lime", ms=12, mew=1.4, label="measured peak")
 
+
        ax.set_xlabel("$f_x$ [cycles/pixel]"); ax.set_ylabel("$f_y$ [cycles/pixel]")
-       ax.set_title(f"Far field  $\\theta$={theta:g}$\\degree$, $\\Lambda$={period:g} px",
-                    fontweight="bold")
+       deg_note = " [+1/-1 degenerate, power split]" if split == 2 else ""
+       ax.set_title(f"Far field  $\\theta$={theta:g}$\\degree$, $\\Lambda$={period:g} px    "
+                    f"steer {steering_deg(period):.2f}$\\degree$\n"
+                    f"$\\eta_{{grating}}$={100*eta_g:.1f} % x envelop={100*env:.1f} %"
+                    + (f"   /2" if split == 2 else "")
+                    + f"    = $\\eta_{{total}}$={100*eta_tot:.1f} %{deg_note}",
+                    fontweight="bold", fontsize=9)
        ax.legend(fontsize=8, loc="upper right")
        fig.colorbar(m, ax=ax, label="dB")
        fig.tight_layout()
@@ -716,6 +1082,8 @@ def plot_far_field(table, rows, cols, outdir, cache):
        fig.savefig(p, dpi=200); plt.close(fig)
        paths.append(p)
    return paths
+
+
 
 
 # ================================ HELPERS ================================
@@ -729,11 +1097,15 @@ def matrix_block(idx_map, size=None):
    return idx_map[r0:r0 + size, c0:c0 + size]
 
 
+
+
 def print_block(block, title):
    print(f"--- {title} ---")
    for row in block:
        print(" ".join(f"P{int(k):<2d}" for k in row))
    print("-" * 62)
+
+
 
 
 # ================================== MAIN ==================================
@@ -743,8 +1115,11 @@ def main():
              f"_{LEVEL_PHASE_MODEL}_{PHASE_ANCHOR}")
    os.makedirs(outdir, exist_ok=True)
 
+
    disp_nm, phase_raw, table = build_phase_levels()
-   anchor_offset = float(table.phase[ANCHOR_LEVEL])  # noqa: F841  (reported below)
+   anchor_offset = float(table.phase[ANCHOR_LEVEL])
+   shift_cache   = {}
+
 
    print("=" * 78)
    print("PLM BLAZED-GRATING GENERATOR")
@@ -755,7 +1130,8 @@ def main():
          f"{phase_raw.max()/np.pi:.4f} pi  ({100*phase_raw.max()/TWO_PI:.1f} % of 2 pi)")
    print(f"max quant. error  : {table.max_quantization_error():.4f} rad")
    print(f"phase anchor      : '{PHASE_ANCHOR}'  (ramp origin = {ORIGIN}"
-         + (f", pinned to P{ANCHOR_LEVEL})" if PHASE_ANCHOR == "P0" else ", offset optimised)"))
+         + (f", pinned to P{ANCHOR_LEVEL}) = {anchor_offset/np.pi:.4f} pi)"
+             if PHASE_ANCHOR == "P0" else ", offset optimised)"))
    _rule_note = {
        "clip":    "  (truncated blaze: sawtooth resets each period, saturates at P15)",
        "nearest": "  (wrapped blaze: dead-zone phases fold to the closer of P15 / P0)",
@@ -769,6 +1145,7 @@ def main():
              f"Full 2 pi would need {LAMBDA_NM/2:.1f} nm of piston "
              f"(or lambda <= {2*MAX_DISPLACEMENT_NM:.1f} nm).")
    print()
+
 
    # ----------------------- calibration table + CSV -----------------------
    calib_csv = os.path.join(outdir, "Phase_Calibration_P0_P15.csv")
@@ -792,147 +1169,173 @@ def main():
    print("-" * 78)
    print(f"saved: {calib_csv}\n")
 
+
    print(f"saved: {plot_calibration(disp_nm, phase_raw, table, outdir)}")
    print(f"saved: {plot_tile_key(phase_raw, outdir)}\n")
 
+
    # --------------------------- symmetry self-test ---------------------------
    print("SYMMETRY SELF-TEST (theta+180 sequence == reverse of theta sequence)")
-   lines, worst = symmetry_report(table)
+   lines, worst = symmetry_report(table, rows, cols, shift_cache)
    for ln in lines:
        print(ln)
    print(f"  ==> worst case: {worst} mismatches   {'PASS' if worst == 0 else 'FAIL'}\n")
 
+
    # ----------------------------- main sweep -----------------------------
    eff_csv = os.path.join(outdir, "Diffraction_Efficiency.csv")
    mat_csv = os.path.join(outdir, f"CGH_Phase_Matrices_{MATRIX_SIZE}x{MATRIX_SIZE}.csv")
-   records, shift_cache, n_done = [], {}, 0
+   records, n_done = [], 0
    bmp_dir = os.path.join(outdir, "bmp")
    if SAVE_BMP:
        os.makedirs(bmp_dir, exist_ok=True)
        print(f"SAVE_BMP = True -> writing {len(ANGLES_DEG) * len(PERIODS)} bitmaps "
              f"({PLM_WIDTH}x{PLM_HEIGHT} each) to {bmp_dir}")
 
-   f_eff = open(eff_csv, "w", newline="")
-   f_mat = open(mat_csv, "w", newline="")
-   w_eff, w_mat = csv.writer(f_eff), csv.writer(f_mat)
-   w_eff.writerow(["theta_deg", "period_px", "anchor", "quant_rule", "source", "shift_frac",
-                   "levels_used",
-                   "eta_grating", "eta_free_anchor", "eta_legacy", "eta_envelope",
-                   "order_split", "eta_total", "steer_deg", "nyquist_ok",
-                   "alias_period_px", "alias_reversed"])
-   w_mat.writerow(["type", "theta_deg", "period_px", "codes_used", "eta_grating", "row"]
-                  + [f"c{c}" for c in range(MATRIX_SIZE)])
+
 
    cut_csv = os.path.join(outdir, "Code_Cuts.csv")
-   f_cut = open(cut_csv, "w", newline="")
-   w_cut = csv.writer(f_cut)
-   w_cut.writerow(["theta_deg", "period_px", "cut", "source"]
-                  + [f"s{c}" for c in range(CUT_LEN)])
+   with open(eff_csv, "w", newline="") as f_eff, \
+        open(mat_csv, "w", newline="") as f_mat, \
+        open(cut_csv, "w", newline="") as f_cut:
+       w_eff, w_mat, w_cut = csv.writer(f_eff), csv.writer(f_mat), csv.writer(f_cut)
+       w_eff.writerow(["theta_deg", "period_px", "anchor", "quant_rule", "source", "shift_frac",
+                       "levels_used",
+                       "eta_grating", "eta_free_anchor", "eta_legacy", "eta_envelope",
+                       "order_split", "eta_total", "steer_deg", "nyquist_ok",
+                       "alias_period_px", "alias_reversed"])
+       w_mat.writerow(["type", "theta_deg", "period_px", "codes_used", "eta_grating", "row"]
+                       + [f"c{c}" for c in range(MATRIX_SIZE)])
+       w_cut.writerow(["theta_deg", "period_px", "cut", "source"]
+                       + [f"s{c}" for c in range(CUT_LEN)])
 
-   if DERIVE_COMPLEMENTS:
-       base_angles = [a for a in ANGLES_DEG if a % 360.0 < 180.0]
-       complement_set = {a % 360.0 for a in ANGLES_DEG if a % 360.0 >= 180.0}
-       print(f"DERIVE_COMPLEMENTS: computing {base_angles} and deriving "
-             f"{sorted(complement_set)} as rot180 of them\n")
-   else:
-       base_angles, complement_set = list(ANGLES_DEG), set()
 
-   def emit(theta, period, idx, v, v_lab, shift, derived):
-       """Score, log and (optionally) save one pattern."""
-       nonlocal n_done
-       eta_g = grating_efficiency(idx, v, period, table)
-       eta_f = (eta_g if (PHASE_ANCHOR == "free" or QUANT_RULE != "nearest") else
-                grating_efficiency(
-                    build_index_map(v, period, table, optimise_shift(v, period, table)),
-                    v, period, table))
-       eta_l = grating_efficiency(make_index_map_legacy(v_lab, period), v_lab, period, table)
-       env = pixel_envelope(period, theta)
-       split = order_degeneracy(period, theta)
-       eta_order = eta_g / split              # power actually reaching ONE first order
-       ok, alias_p, rev = alias_info(period)
-       used = "|".join(f"P{k}" for k in np.unique(idx))
-       src = "rot180" if derived else "computed"
+       if DERIVE_COMPLEMENTS:
+           base_angles = [a for a in ANGLES_DEG if a % 360.0 < 180.0]
+           complement_set = {a % 360.0 for a in ANGLES_DEG if a % 360.0 >= 180.0}
+           print(f"DERIVE_COMPLEMENTS: computing {base_angles} and deriving "
+                 f"{sorted(complement_set)} as rot180 of them\n")
+       else:
+           base_angles, complement_set = list(ANGLES_DEG), set()
 
-       records.append({"theta": theta, "period": period, "eta_grating": eta_g,
-                       "eta_total": eta_order * env, "eta_free": eta_f,
-                       "eta_legacy": eta_l, "split": split})
-       w_eff.writerow([f"{theta:g}", f"{period:.2f}", PHASE_ANCHOR, QUANT_RULE, src,
-                       f"{shift:.6f}", used,
-                       f"{eta_g:.6f}", f"{eta_f:.6f}", f"{eta_l:.6f}", f"{env:.6f}",
-                       split, f"{eta_order*env:.6f}", f"{steering_deg(period):.4f}",
-                       int(ok), f"{alias_p:.4f}", int(rev)])
 
-       if SAVE_BMP:
-           Image.fromarray(index_map_to_bitmap(idx) * 255).save(
-               os.path.join(bmp_dir, f"CGH_PLM_L{period:.1f}_theta{theta:g}deg.bmp"))
-       n_done += 1
+       def emit(theta, period, idx, v, v_lab, shift, derived):
+           """Score, log and (optionally) save one pattern."""
+           nonlocal n_done
+           eta_g = grating_efficiency(idx, v, period, table)
+           if PHASE_ANCHOR == "free" or QUANT_RULE !="nearest":
+               eta_f = eta_g
+           else:
+               key = (round(theta % 180.0, 6), period)
+               if key not in free_shift_cache:
+                   free_shift_cache[key] = optimise_shift(v, period, table)
+               eta_f = grating_efficiency(
+                        build_index_map(v, period, table, free_shift_cache[key]),
+                        v, period, table)
+           eta_l = grating_efficiency(make_index_map_legacy(v_lab, period), v_lab, period, table)
+           env = pixel_envelope(period, theta)
+           split = order_degeneracy(period, theta)
+           eta_order = eta_g / split              # power actually reaching ONE first order
+           ok, alias_p, rev = alias_info(period, theta)
+           used = "|".join(f"P{k}" for k in np.unique(idx))
+           src = "rot180" if derived else "computed"
 
-       blk = matrix_block(idx)
-       if PRINT_MATRIX and round(period, 2) in LOG_LAMBDAS:
-           note = "  [SYMMETRIC: +1/-1 split, cannot steer one way]" if split == 2 else ""
-           print_block(blk, f"theta={theta:g} deg, Lambda={period:.1f} px  |  "
-                            f"codes {used}  |  eta={100*eta_g:5.1f} % "
-                            f"(original {100*eta_l:5.1f} %)  shift={shift:.4f} [{src}]{note}")
-       if CSV_MATRIX:
-           for r_i, row in enumerate(blk):
-               w_mat.writerow(["grating", f"{theta:g}", f"{period:.2f}", used,
-                               f"{eta_g:.6f}", r_i] + [f"P{int(k)}" for k in row])
-       if CSV_CUTS:
-           half = CUT_LEN // 2
-           ri, ci = rows // 2, cols // 2
-           h = idx[ri, ci - half:ci + half + 1]
-           w = idx[ri - half:ri + half + 1, ci]
-           w_cut.writerow([f"{theta:g}", f"{period:.2f}", "row_horizontal", src]
-                          + [f"P{int(k)}" for k in h])
-           w_cut.writerow([f"{theta:g}", f"{period:.2f}", "col_vertical", src]
-                          + [f"P{int(k)}" for k in w])
 
-   for theta in base_angles:
-       if theta in FLAT_ANGLES:
-           flat = np.full((rows, cols), FLAT_PHASE_LEVEL, dtype=np.uint8)
+           records.append({"theta": theta, "period": period, "eta_grating": eta_g,
+                           "eta_total": eta_order * env, "eta_free": eta_f,
+                           "eta_legacy": eta_l, "split": split})
+           w_eff.writerow([f"{theta:g}", f"{period:.2f}", PHASE_ANCHOR, QUANT_RULE, src,
+                           f"{shift:.6f}", used,
+                           f"{eta_g:.6f}", f"{eta_f:.6f}", f"{eta_l:.6f}", f"{env:.6f}",
+                           split, f"{eta_order*env:.6f}", f"{steering_deg(period):.4f}",
+                           int(ok), f"{alias_p:.4f}", int(rev)])
+
+
            if SAVE_BMP:
-               Image.fromarray(index_map_to_bitmap(flat) * 255).save(
-                   os.path.join(bmp_dir, f"CGH_PLM_Flat_P{FLAT_PHASE_LEVEL}_"
-                                         f"{PLM_WIDTH}x{PLM_HEIGHT}.bmp"))
+               Image.fromarray(index_map_to_bitmap(idx) * 255).save(
+                   os.path.join(bmp_dir, f"CGH_PLM_L{period:.1f}_theta{theta:g}deg.bmp"))
            n_done += 1
-           blk = matrix_block(flat)
-           if PRINT_MATRIX:
-               print_block(blk, f"flat state P{FLAT_PHASE_LEVEL}")
+
+
+           blk = matrix_block(idx)
+           if PRINT_MATRIX and round(period, 2) in LOG_LAMBDAS:
+               note = "  [SYMMETRIC: +1/-1 split, cannot steer one way]" if split == 2 else ""
+               print_block(blk, f"theta={theta:g} deg, Lambda={period:.1f} px  |  "
+                                f"codes {used}  |  eta={100*eta_g:5.1f} % "
+                                f"(original {100*eta_l:5.1f} %)  shift={shift:.4f} [{src}]{note}")
            if CSV_MATRIX:
                for r_i, row in enumerate(blk):
-                   w_mat.writerow(["flat", f"{theta:g}", "NA", f"P{FLAT_PHASE_LEVEL}", "NA", r_i]
-                                  + [f"P{int(k)}" for k in row])
-           continue
+                   w_mat.writerow(["grating", f"{theta:g}", f"{period:.2f}", used,
+                                   f"{eta_g:.6f}", r_i] + [f"P{int(k)}" for k in row])
+           if CSV_CUTS:
+               half = CUT_LEN // 2
+               # sample the same part of teh panel that matrix_block logs
+               ri, ci = rows // 2, cols // 2
+               h = idx[ri, ci - half:ci + half + 1]
+               w = idx[ri - half:ri + half + 1, ci]
+               w_cut.writerow([f"{theta:g}", f"{period:.2f}", "row_horizontal", src]
+                              + [f"P{int(k)}" for k in h])
+               w_cut.writerow([f"{theta:g}", f"{period:.2f}", "col_vertical", src]
+                              + [f"P{int(k)}" for k in w])
 
-       v = ramp_coordinate(rows, cols, theta)
-       v_lab = ramp_coordinate(rows, cols, theta, origin="corner")   # original-script convention
-       for period in PERIODS:
-           period = float(period)
-           shift = resolve_shift(theta, period, v, table, shift_cache)
-           idx = build_index_map(v, period, table, shift)
-           emit(theta, period, idx, v, v_lab, shift, derived=False)
 
+       for theta in base_angles:
            comp = (theta + 180.0) % 360.0
-           if DERIVE_COMPLEMENTS and comp in complement_set:
-               idx_c = np.rot90(idx, 2)
-               emit(comp, period, idx_c,
-                    ramp_coordinate(rows, cols, comp),
-                    ramp_coordinate(rows, cols, comp, origin="corner"),
-                    shift, derived=True)
-           del idx
+           has_comp = DERIVE_COMPLEMENTS and comp in complement_set
 
-       for th in ([theta] + ([comp] if DERIVE_COMPLEMENTS and comp in complement_set else [])):
-           d = [r for r in records if r["theta"] == th]
-           if d:
-               print(f"theta = {th:6.1f} deg   mean eta = "
-                     f"{100*np.mean([r['eta_grating'] for r in d]):5.1f} %   "
-                     f"(original {100*np.mean([r['eta_legacy'] for r in d]):5.1f} %)"
-                     + ("   [derived by rot180]" if th != theta else ""))
 
-   f_eff.close(); f_mat.close(); f_cut.close()
-   print(f"\nsaved: {eff_csv}")
-   print(f"saved: {mat_csv}")
-   print(f"saved: {cut_csv}")
+           if theta in FLAT_ANGLES:
+               flat = np.full((rows, cols), FLAT_PHASE_LEVEL, dtype=np.uint8)
+               if SAVE_BMP:
+                   Image.fromarray(index_map_to_bitmap(flat) * 255).save(
+                       os.path.join(bmp_dir, f"CGH_PLM_FLAT_P{FLAT_PHASE_LEVEL}_"
+                                             f"{PLM_WIDTH}x{PLM_HEIGHT}.bmp"))
+               blk = matrix_block(flat)
+               # a flat panel is its own rot 180,  so the complement is emitted here too --
+               # otherwise DERIVE_COMPLELEMENT. drops theta+180 from teh run entirely
+               for th in [theta] + ([comp] if has_comp else []):
+                   n_done +=1
+                   if PRINT_MATRIX:
+                       print_block(blk, f"Flat state P{FLAT_PHASE_LEVEL} (theta={th:g} deg)")
+                       if CSV_MATRIX:
+                           for r_i, row in enumerate(blk):
+                               w_mat.writerow(["flat", f"{th:g}", "NA", f"P{FLAT_PHASE_LEVEL}", 
+                                               "NA", r_i] + [f"P{int(k)}" for k in row])
+               continue
+
+
+           v = ramp_coordinate(rows, cols, theta)
+           v_lab = ramp_coordinate(rows, cols, theta, origin="corner")   # original-script convention
+           # direction_cosines negates exactly for theta+180, so the complementary ramps
+           # are exactly -v and do not need rebuilding once per period
+           v_comp       = -v        if has_comp else None
+           v_comp_lab   = -v_lab    if has_comp else None
+
+
+           for period in PERIODS:
+               period = float(period)
+               shift = resolve_shift(theta, period, v, table, shift_cache)
+               idx = build_index_map(v, period, table, shift)
+               emit(theta, period, idx, v, v_lab, shift, derived=False)
+
+
+               if has_comp:
+                   emit(comp, period, np.rot90(idx, 2), v_comp, v_comp_lab,
+                        shift, derived=True)
+               del idx
+
+
+           for th in [theta] + ([comp] if has_comp else []):
+               d = [r for r in records if r["theta"] == th]
+               if d:
+                   print(f"theta = {th:6.1f} deg    mean eta = " 
+                         f"{100*np.mean([r['eta_grating'] for r in d]):5.1f} %   "
+                         f"(original {100*np.mean([r['eta_legacy'] for r in d]):5.1f} %)"
+                         + ("   [derived by rot180]" if th != theta else ""))
+       print(f"\nsaved:{eff_csv}")
+       print(f"\nsaved:{mat_csv}")
+       print(f"\nsaved:{cut_csv}")
+   
 
    deg = sorted({(r["theta"], r["period"]) for r in records if r["split"] == 2})
    if deg:
@@ -944,6 +1347,7 @@ def main():
        print("  50/50 between the two first orders. eta_total is halved accordingly.")
        print("  Use Lambda > 2 px if you need the beam to go one way only.")
 
+
    # ------------------------- complementary check -------------------------
    print("\nCOMPLEMENTARY-ANGLE EFFICIENCY CHECK  |eta(theta) - eta(theta+180)|")
    by = {(r["theta"], r["period"]): r["eta_grating"] for r in records}
@@ -953,18 +1357,26 @@ def main():
        if d:
            print(f"  {theta:6.1f} vs {theta+180:6.1f} deg : max diff = {max(d):.3e}")
 
+
    # ------------------------------- plots -------------------------------
    for p in plot_efficiency(records, outdir):
        print(f"saved: {p}")
+   gc = plot_far_field(table, rows, cols, outdir, shift_cache)
+   if gc:
+       print(f"saved: {gc}")
+
+
    ff = plot_far_field(table, rows, cols, outdir, shift_cache)
    if ff:
-       print(f"saved: {len(ff)} far-field plot(s) -> {os.path.dirname(ff[0])}")
+       print(f"saved: {len(ff)} far-field plot(s) --> {os.path.dirname(ff[0])}")
+
 
    v0 = ramp_coordinate(rows, cols, 0.0)
    rp = plot_phase_ramps(table, outdir,
                          lambda p: resolve_shift(0.0, p, v0, table, shift_cache))
    if rp:
        print(f"saved: {len(rp)} phase-ramp plot(s), overview -> {rp[0]}")
+
 
    eg = np.array([r["eta_grating"] for r in records])
    ef = np.array([r["eta_free"] for r in records])
@@ -977,6 +1389,8 @@ def main():
        print(f"cost of pinning the ramp to P{ANCHOR_LEVEL}          : "
              f"{100*(ef[ok].mean() - eg[ok].mean()):.2f} percentage points")
    print(f"best : {100*eg.max():.2f} %    worst (Lambda >= 2): {100*eg[ok].min():.2f} %")
+
+
 
 
 if __name__ == "__main__":
