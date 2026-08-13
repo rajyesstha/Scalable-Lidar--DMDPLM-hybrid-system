@@ -149,8 +149,8 @@ PERIODS = np.round(np.arange(1.0, 3.01, 0.1), 2)      # your original sweep (inc
 # 4. OUTPUT TOGGLES
 # -----------------------------------------------------------------------------
 # fmt: off
-SAVE_BMP          = True   # write one full-resolution CGH bitmap per angle x period
-SAVE_TILE_BMP     = True   # write the sixteen 20x20 tile-key bitmaps
+SAVE_BMP          = False   # write one full-resolution CGH bitmap per angle x period
+SAVE_TILE_BMP     = False   # write the sixteen 20x20 tile-key bitmaps
 
 
 DERIVE_COMPLEMENTS = True   # compute only theta < 180 and obtain theta+180 as rot180 of it.
@@ -165,10 +165,10 @@ CUT_LEN           = 25      # samples per cut (odd, centred on the array centre)
 PRINT_MATRIX      = True    # console: print the NxN code matrix, LOG_LAMBDAS periods only
 CSV_MATRIX        = True    # CSV: write the NxN code matrix for EVERY angle x period
 MATRIX_SIZE       = 20      # N, the logged block size
-LOG_LAMBDAS       = [1.0, 1.4, 2.0, 2.1, 2.5, 3.0]   # which periods get printed to console
+LOG_LAMBDAS       = [1.0, 1.4, 1.5, 2.0, 2.1, 2.5, 3.0]   # which periods get printed to console
 
 
-PLOT_FAR_FIELD    = "all"   # "off"   -> no far-field plots
+PLOT_FAR_FIELD    = "cases"   # "off"   -> no far-field plots
                             # "cases" -> only SPECTRUM_CASES below
                             # "all"   -> one plot per angle x period (SLOW, many files)
 
@@ -198,16 +198,17 @@ GRID_CORNER = GRID_EDGE / np.sqrt(2)    # 1.48492 -- do not round this
 
 
 GRID_SPOTS = [
-    ("centre", None,  None),
-    ("E",   0.0, GRID_EDGE),   ("N",   90.0, GRID_EDGE),
-    ("W", 180.0, GRID_EDGE),   ("S",  270.0, GRID_EDGE),
-    ("NE",  45.0, GRID_CORNER), ("NW", 135.0, GRID_CORNER),
-    ("SW", 225.0, GRID_CORNER), ("SE", 315.0, GRID_CORNER),
+    ("(0,0)", None,  None),
+    ("(1,0)",   0.0, GRID_EDGE),   ("(0,1)",   90.0, GRID_EDGE),
+    ("(-1,0)", 180.0, GRID_EDGE),   ("(0,-1)",  270.0, GRID_EDGE),
+    ("(1,1)",  45.0, GRID_CORNER), ("(-1,1)", 135.0, GRID_CORNER),
+    ("(-1,-1)", 225.0, GRID_CORNER), ("(1,-1)", 315.0, GRID_CORNER),
 ]
 PLOT_PHASE_RAMP   = "all"
                             # "cases" -> overview grid only (one panel per period)
                             # "all"   -> overview grid + one detailed plot per period
-SPECTRUM_CASES    = [(0.0, 2.0), (0.0, 3.0), (45.0, 2.5), (180.0, 3.0)]
+SPECTRUM_CASES    = [(0.0, 2.1), (45.0, 1.5), (90.0, 2.1), (135, 1.5), 
+                     (180, 2.1), (225, 1.5), (270, 2.1), (315, 1.5)]
 SPECTRUM_N        = 256     # centred crop size used for the far-field FFT
 # fmt: on
 
@@ -970,22 +971,33 @@ def plot_grid_composite(table, rows, cols, outdir, cache):
 
     img = 10 * np.log10(np.maximum(stack / max(stack.max(), 1e-12), 1e-6))
     fig, ax = plt.subplots(figsize=(8.2, 7.4), dpi=150)
-    m = ax.imshow(img, cmap="inferno", vmin=-45, vmax=0, origin="lower",
+    fig.subplots_adjust(left=0.12, right=0.83, bottom=0.12, top=0.90)
+    m = ax.imshow(img, cmap="inferno", vmin=-50, vmax=0, origin="lower",
                   extent=freq_extent(n))
     for label, fx, fy, eta, split in marks:
-        ax.plot(fx, fy, "o", mfc="none", mec="cyan", ms=17, mew=1.6)
+        ax.plot(fx, fy, "o", mfc="none", mec="red", ms=17, mew=2.0)
         dy = 34 if fy < 0 else -34          # keep the label inside the axes
         va = "bottom" if fy < 0 else "top"
         ax.annotate(f"{label}\n{100*eta:.1f} %", xy=(fx, fy), xytext=(0, dy),
                     textcoords="offset points", ha="center", va=va, color="cyan",
-                    fontsize=8, fontweight="bold",
-                    bbox=dict(boxstyle="round,pad=0.22", fc="black", ec="cyan", alpha=.7))
-    ax.set_xlabel("$f_x$ [cycles/pixel]"); ax.set_ylabel("$f_y$ [cycles/pixel]")
-    ax.set_title(f"Steering grid, stacked far field   [{QUANT_RULE} / {LEVEL_PHASE_MODEL}]\n"
-                 f"circles = target order, label = $\\eta_{{total}}$",
-                 fontweight="bold", fontsize=10)
-    fig.colorbar(m, ax=ax, label="dB (normalised to brightest spot)")
-    fig.tight_layout()
+                    fontsize=11, fontweight="bold",
+                    bbox=dict(boxstyle="round,pad=0.25", fc="black", ec="cyan", alpha=.7),
+                    annotation_clip=False)
+    ax.set_xlabel("$f_x$ [cycles/pixel]", fontsize=14)
+    ax.set_ylabel("$f_y$ [cycles/pixel]", fontsize=14)
+    #ax.set_title(f"3$\\times 3$ steering grid, stacked far field   [{QUANT_RULE} / {LEVEL_PHASE_MODEL}]\n"
+    #            f"circles = target order, label = $\\eta_{{target}}$",
+    #             fontweight="bold", fontsize=14)
+    ax.set_title(f"$3\\times 3$ steering grid, stacked far field\n"
+                f"circles = +1st order target with $\\eta_{{target}}$",
+                fontweight="bold", fontsize=14)
+    
+    
+    
+    cbar = fig.colorbar(m, ax=ax, label="dB (normalised to brightest spot)", pad=0.03,
+                       fraction=0.045, shrink=0.88)
+    cbar.ax.tick_params(labelsize=12)
+    cbar.set_label("dB (normalised to brightest spot)", fontsize=13)
     path = os.path.join(outdir, "Grid_Composite_FarField.png")
     fig.savefig(path, dpi=200); plt.close(fig)
 
@@ -1032,6 +1044,7 @@ def plot_far_field(table, rows, cols, outdir, cache):
 
 
         fig, ax = plt.subplots(figsize=(6, 5.4), dpi=150)
+        fig.subplots_adjust(left=0.14, right=0.83, bottom=0.14, top=0.90)
         m = ax.imshow(img, cmap="inferno", vmin=-50, vmax=0, origin="lower",
                       extent=freq_extent(n))
 
@@ -1047,12 +1060,13 @@ def plot_far_field(table, rows, cols, outdir, cache):
         eta_tot = eta_g * env / split
 
 
-        ax.plot(fxa, fya, "o", mfc="none", mec="cyan", ms=16, mew=1.8,
+        ax.plot(fxa, fya, "o", mfc="none", mec="red", ms=16, mew=2.0,
                 label="+1 order (target)")
         ax.annotate(f"+1\n{100*eta_tot:.1f} %", xy=(fxa, fya),
-                    xytext=(10, 10), textcoords="offset points", color="cyan",
-                    fontsize=9, fontweight="bold",
-                    bbox=dict(boxstyle="round,pad=0.25", fc="black", ec="cyan", alpha=.65))
+                    xytext=(-22, 22), textcoords="offset points", color="cyan",
+                    fontsize=11, fontweight="bold",
+                    bbox=dict(boxstyle="round,pad=0.25", fc="black", ec="cyan", alpha=.65),
+                    annotation_clip=False)
 
 
         # sanity annotation: where the brightest non-DC lobe actually sits.
@@ -1064,17 +1078,16 @@ def plot_far_field(table, rows, cols, outdir, cache):
         ax.plot(f_ax[pj_], f_ax[pi_], "+", c="lime", ms=12, mew=1.4, label="measured peak")
 
 
-        ax.set_xlabel("$f_x$ [cycles/pixel]"); ax.set_ylabel("$f_y$ [cycles/pixel]")
+        ax.set_xlabel("$f_x$ [cycles/pixel]", fontsize=14)
+        ax.set_ylabel("$f_y$ [cycles/pixel]", fontsize=14)
         deg_note = "   [+1/-1 degenerate, power split]" if split == 2 else ""
-        ax.set_title(f"Far field  $\\theta$={theta:g}$\\degree$, $\\Lambda$={period:g} px   "
-                     f"steer {steering_deg(period):.2f}$\\degree$\n"
-                     f"$\\eta_{{grating}}$={100*eta_g:.1f} %  x  envelope={100*env:.1f} %"
-                     + ("  /2" if split == 2 else "")
-                     + f"  =  $\\eta_{{total}}$={100*eta_tot:.1f} %{deg_note}",
-                     fontweight="bold", fontsize=9)
-        ax.legend(fontsize=8, loc="upper right")
-        fig.colorbar(m, ax=ax, label="dB")
-        fig.tight_layout()
+        ax.set_title(f"Far field  $\\theta$ = {theta:g}$\\degree$, $\\Lambda$={period:g} px   "
+                     f"$\\eta_{{target}} $={ 100*eta_tot:.1f} %{deg_note}",
+                     fontweight="bold", fontsize=14)
+        ax.legend(fontsize=14, loc="upper right")
+        cbar = fig.colorbar(m, ax=ax, label="dB", pad=0.03, fraction=0.045, shrink=0.88)
+        cbar.ax.tick_params(labelsize=12)
+        cbar.set_label("dB", fontsize=13)
         p = os.path.join(outdir, "far_field", f"FarField_theta{theta:g}_L{period:g}.png")
         os.makedirs(os.path.dirname(p), exist_ok=True)
         fig.savefig(p, dpi=200); plt.close(fig)

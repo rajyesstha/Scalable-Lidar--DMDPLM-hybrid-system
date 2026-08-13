@@ -163,10 +163,9 @@ fig = plt.figure(
 )
 
 # Main 3x3 montage region must be square.
-# width  = right - left  = 0.86
-# height = top - bottom = 0.86
-left = 0.02
-right = 0.88
+# Leave extra space on the right for the colorbar label to avoid clipping.
+left = 0.04
+right = 0.82
 bottom = 0.07
 top = 0.93
 
@@ -263,7 +262,7 @@ for r in range(3):
             12,
             28,
             top_label,
-            fontsize=9.5,
+            fontsize=14,
             fontweight="bold",
             color="black",
             family="Arial",
@@ -277,7 +276,7 @@ for r in range(3):
 
 # ========================== COLORBAR ==========================
 if show_phase_profile:
-    cbar_ax = fig.add_axes([0.905, bottom + 0.10, 0.025, (top - bottom) - 0.20])
+    cbar_ax = fig.add_axes([0.86, bottom + 0.10, 0.025, (top - bottom) - 0.20])
 
     cb = fig.colorbar(
         last_im,
@@ -288,10 +287,10 @@ if show_phase_profile:
     cb.set_ticks(ticks)
     cb.set_ticklabels([f"{x:.2f}$\\pi$" for x in ticks])
 
-    cb.ax.tick_params(labelsize=11)
+    cb.ax.tick_params(labelsize=12)
     cb.set_label(
         "Phase delay ($\\pi$ radians)",
-        fontsize=12,
+        fontsize=15,
         family="Arial"
     )
 
