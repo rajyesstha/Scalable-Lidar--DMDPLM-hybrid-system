@@ -77,7 +77,7 @@ for x, y, err in zip(orders, theta_d, error_bars):
         markerfacecolor='white',   # Sleek open-circle visual format
         markeredgecolor=color,
         markeredgewidth=1.5,
-        label=f'Order {x:2d}: Full sub-FOV = {total_fov_span:.2f}°',
+        label=f'$m$={x:2d}: FFOV = {total_fov_span:.2f}°',
         zorder=3
     )
 
@@ -90,15 +90,15 @@ for x, y, err in zip(orders, theta_d, error_bars):
         annotation_text, 
         ha='left', 
         va='center', 
-        fontsize=9.5, 
+        fontsize=17, 
         color='#c1272d',       # Deep crimson accent color for clarity
         weight='bold',
         zorder=4
     )
 
 # ========================== AXIS FORMATTING ==========================
-ax.set_xlabel('Diffraction Orders', fontsize=12, labelpad=4)
-ax.set_ylabel('RxDMD sub-FOV steering angles (deg)', fontsize=12, labelpad=4)
+ax.set_xlabel('Diffraction Orders', fontsize=20, labelpad=4)
+ax.set_ylabel('RxDMD sub-FOV steering angles (deg)', fontsize=20, labelpad=4)
 
 ax.tick_params(axis='both', which='major', labelsize=10.5, width=0.8)
 for spine in ax.spines.values():
@@ -114,8 +114,8 @@ ax.grid(True, linestyle='--', alpha=0.25, color='#b0b0b0', linewidth=0.5)
 leg = ax.legend(
     title=rf'$\mathbf{{\theta_{{inc}} = {theta_i}^\circ\ (f = {focal_length}\text{{ mm}})}}$',
     loc='upper right', 
-    fontsize=9.0, 
-    title_fontsize=10.0,
+    fontsize=15.0, 
+    title_fontsize=15.0,
     frameon=True, 
     framealpha=0.95, 
     edgecolor='#b0b0b0'
@@ -126,6 +126,7 @@ leg.get_frame().set_linewidth(0.6)
 fig.set_constrained_layout_pads(w_pad=4/72, h_pad=4/72, hspace=0, wspace=0)
 
 plt.savefig('RxDMD_Discrete_Steering_Analysis.png', dpi=600)
-plt.savefig('RxDMD_Discrete_Steering_Analysis.pdf', dpi=600)
+#plt.savefig('RxDMD_Discrete_Steering_Analysis.pdf', dpi=600)
+plt.savefig('RxDMD_Discrete_Steering_Analysis.svg')
 
-plt.show()
+#plt.show()

@@ -1,8 +1,10 @@
-import numpy as np
+from pathlib import Path
+import matplotlib as mpl
 import matplotlib.pyplot as plt
+import numpy as np
 from sklearn.linear_model import LinearRegression
 
-# --- Data ---
+# ========================== DATA ==========================
 ground_truth = np.array([
     117, 127, 137, 147, 110, 125, 137, 158, 168,
     102, 125, 133, 152, 162, 103, 124, 134, 147, 170,
@@ -40,15 +42,24 @@ for order in unique_orders:
     rms = np.sqrt(np.mean(residuals ** 2))
     rms_by_order[order] = rms
 
-# ========================== GLOBAL FONT CONFIGURATION ==========================
-plt.rcParams['font.family'] = 'sans-serif'
-plt.rcParams['font.sans-serif'] = ['Helvetica', 'Arial']
-plt.rcParams['mathtext.fontset'] = 'dejavusans'
+# ========================== OUTPUT CONFIG ==========================
+outdir = Path(".")
+basename = "Distance_linear_regression"
+
+# ========================== GLOBAL FONT & MATPLOTLIB CONFIG ==========================
+mpl.rcParams.update({
+    "font.family": "sans-serif",
+    "font.sans-serif": ["Helvetica", "Arial", "DejaVu Sans"],
+    "mathtext.fontset": "dejavusans",
+    "pdf.fonttype": 42,
+    "ps.fonttype": 42,
+    "svg.fonttype": "none",
+})
 
 # ========================== FIGURE SETUP ==========================
-fig, ax = plt.subplots(figsize=(8.5, 6), dpi=300, layout='constrained')
+# Aspect ratio enforced: 5.74 in width x 3.22 in height (~1.78 aspect ratio)
+fig, ax = plt.subplots(figsize=(5.74, 3.22), dpi=300, layout="constrained")
 
-# YOUR ORIGINAL COLOR DICTIONARY RESTORED EXACTLY
 order_colors = {
     "-2": "#8080FF",
     "-1": "#00FFFF",
@@ -66,10 +77,10 @@ max_val = max(np.max(ground_truth), np.max(computed)) + 5
 ax.plot(
     [min_val, max_val],
     [min_val, max_val],
-    linestyle='--',
+    linestyle="--",
     linewidth=1.0,
-    color='#777777',
-    label="Ideal 1:1 Line",
+    color="#777777",
+    label="1:1 Line",
     zorder=1
 )
 
@@ -82,7 +93,7 @@ for order in unique_orders:
     y = computed[indices]
     yerr = errors[indices]
 
-    # Plot linear regression line
+    # Linear regression line
     model = LinearRegression().fit(x.reshape(-1, 1), y)
     x_fit = np.linspace(min(x), max(x), 100)
     y_fit = model.predict(x_fit.reshape(-1, 1))
@@ -90,60 +101,66 @@ for order in unique_orders:
     ax.plot(
         x_fit,
         y_fit,
-        linestyle='-',
+        linestyle="-",
         linewidth=1.2,
         color=color,
         zorder=2
     )
 
-    # UNIFIED SHAPE STYLING:
-    # Uses a single circle ('o') but colors the face with your original hex color.
-    # A sleek dark-charcoal outline ('#222222') is added to make the markers pop.
+    # Scatter with error bars
     ax.errorbar(
         x,
         y,
         yerr=yerr,
-        fmt='o',
-        capsize=3,
+        fmt="o",
+        capsize=2.5,
         color=color,
         ecolor=color,
-        elinewidth=1.0,
-        markersize=6.0,
-        markerfacecolor=color,       # Solid colored fill keeps things cohesive
-        markeredgecolor='#222222',   # Crisp dark border replaces the thick colored edge
-        markeredgewidth=0.8,
-        label=f"Order {order}",
+        elinewidth=0.9,
+        markersize=4.5,
+        markerfacecolor=color,
+        markeredgecolor="#222222",
+        markeredgewidth=0.7,
+        label=f"$m = $ {order}",
         zorder=3
     )
 
 # ========================== AXIS FORMATTING ==========================
-ax.set_xlabel("Ground Truth Distance (cm)", fontsize=13, labelpad=8)
-ax.set_ylabel("Measured Distance (cm)", fontsize=13, labelpad=12)
+ax.set_xlabel("Ground Truth Distance (cm)", fontsize=17, labelpad=5)
+ax.set_ylabel("Measured Distance (cm)", fontsize=17, labelpad=5)
 
-ax.tick_params(axis="both", which="major", labelsize=10.5, width=0.8)
+# Scaled ticks and tick lines for a 3.22" canvas height
+ax.tick_params(
+    axis="both",
+    which="major",
+    labelsize=9.5,
+    length=4.5,
+    width=0.8,
+    pad=3
+)
+
 for spine in ax.spines.values():
     spine.set_linewidth(0.8)
 
 ax.set_xlim(85, 180)
 ax.set_ylim(85, 180)
 
-ax.grid(True, linestyle="--", alpha=0.4, color='#b0b0b0', linewidth=0.6)
+ax.grid(True, linestyle="--", alpha=0.4, color="#b0b0b0", linewidth=0.6)
 
 # ========================== LEGEND & RMS TEXT BOX ==========================
 leg = ax.legend(
-    title="Diffraction Order",
-    fontsize=9,
-    title_fontsize=10.5,
+    #title="Diffraction Order",
+    fontsize=11,
+    title_fontsize=13,
     loc="upper left",
     frameon=True,
     framealpha=0.9,
-    edgecolor='#b0b0b0'
+    edgecolor="#b0b0b0"
 )
 leg.get_frame().set_linewidth(0.6)
 
-# Borderless structured box block anchored beautifully on the lower right workspace margin
-rms_text = "$\\mathbf{RMS Deviations:}$\n" + "\n".join([
-    f"Order {order}: {rms_by_order[order]:.2f} cm"
+rms_text = "$\\mathbf{RMS\\ Dev.:}$\n" + "\n".join([
+    f"$m = $ {order}: {rms_by_order[order]:.2f} cm"
     for order in unique_orders
 ])
 
@@ -152,25 +169,43 @@ ax.text(
     0.03,
     rms_text,
     transform=ax.transAxes,
-    fontsize=9,
-    fontname="Arial",
-    color='#333333',
+    fontsize=12,
+    color="#333333",
     verticalalignment="bottom",
     horizontalalignment="right",
-    linespacing=1.3,
+    linespacing=1.2,
     bbox=dict(
         facecolor="white",
         edgecolor="#b0b0b0",
         linewidth=0.6,
         alpha=0.9,
-        boxstyle='round,pad=0.5'
+        boxstyle="round,pad=0.4"
     )
 )
 
 # ========================== EXPORT ==========================
-fig.set_constrained_layout_pads(w_pad=4/72, h_pad=4/72, hspace=0, wspace=0)
+outdir.mkdir(parents=True, exist_ok=True)
+output_path = outdir / basename
 
-plt.savefig("Distance linear regression.png", dpi=600)
-plt.savefig("Distance linear regression.pdf", dpi=600)
+fig.savefig(
+    output_path.with_suffix(".pdf"),
+    dpi=600,
+    bbox_inches="tight",
+    pad_inches=0.08
+)
 
-plt.show()
+fig.savefig(
+    output_path.with_suffix(".png"),
+    dpi=600,
+    bbox_inches="tight",
+    pad_inches=0.08
+)
+
+fig.savefig(
+    output_path.with_suffix(".svg"),
+    format="svg",
+    bbox_inches="tight",
+    pad_inches=0.08
+)
+
+#plt.show()

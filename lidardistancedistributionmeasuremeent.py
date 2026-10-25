@@ -106,6 +106,19 @@ plt.rcParams['mathtext.fontset'] = 'dejavusans'
 fig, ax = plt.subplots(figsize=(8, 4.5), dpi=300, layout =  'constrained') # Slightly taller to give text headroom
 
 # Match your new data range viewport
+#-2
+#plot_view_range = (110, 160)
+#-1
+#plot_view_range = (100, 180)
+#0
+#plot_view_range = (90, 170)
+#1
+#plot_view_range = (90, 180)
+#2
+#plot_view_range = (80, 170)
+#3
+#plot_view_range = (90, 180)
+#4
 plot_view_range = (110, 170)
 
 # Generate fine spacing across the absolute pipeline limit to keep calculations exact
@@ -145,8 +158,8 @@ for data, label_str, color in zip(iqr_data_list, labels, colors):
     # Use explicit math-mode segments so matplotlib's mathtext parses correctly
     annotation_text = (
         "$\\mathbf{" + label_str + "}$\n"
-        + f"$\\mu$ = {mu:.2f} cm\n"
-        + f"$\\sigma$ = {sigma:.2f} cm"
+        + f"$\\mu$ = {mu:.2f}\n"
+        + f"$\\sigma$ = {sigma:.2f}"
     )
     
     # Place text exactly at (mu), and slightly higher than the top of the curve peak (peak_y)
@@ -156,16 +169,16 @@ for data, label_str, color in zip(iqr_data_list, labels, colors):
         peak_y + 0.3, 
         annotation_text, 
         color=color, 
-        fontsize=14, 
+        fontsize=19, 
         va='bottom', 
         ha='center',
         linespacing=1.2
     )
 
 # === PLOT WINDOW CROPPING & HEADROOM ADJUSTMENT ===
-ax.set_xlabel("Distance (cm)", fontsize=20, labelpad=6)
-ax.set_ylabel("Counts", fontsize=20, labelpad=6)
-ax.tick_params(axis='both', which='major', labelsize=10.5)
+ax.set_xlabel("Distance (cm)", fontsize=27, labelpad=6)
+ax.set_ylabel("Counts", fontsize=27, labelpad=6)
+ax.tick_params(axis='both', which='major', labelsize=15)
 
 ax.set_xlim(plot_view_range)  
 
@@ -182,7 +195,7 @@ if order_label is not None:
         0.96,
         order_label,
         transform=ax.transAxes,
-        fontsize=15,
+        fontsize=20,
         va='top',
         ha='left',
         color='black',

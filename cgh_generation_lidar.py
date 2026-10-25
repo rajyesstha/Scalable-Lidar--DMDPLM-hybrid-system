@@ -92,7 +92,7 @@ ANCHOR_LEVEL = 0          # code pinned to the ramp origin when PHASE_ANCHOR == 
 #               This is the bench/lab rule and what the original script did.
 #               PHASE_ANCHOR is ignored (the LUT is anchored to the ramp itself).
 #
-QUANT_RULE = "lut"
+QUANT_RULE = "nearest"
 # QUANT_RULE = "lut"
 # QUANT_RULE = "clip"
 
@@ -220,7 +220,7 @@ SPECTRUM_N        = 256     # centred crop size used for the far-field FFT
 PLM_WIDTH           = 2716        # DMD-format bitmap width  (= 2 x phase pixels)
 PLM_HEIGHT          = 1600        # DMD-format bitmap height (= 2 x phase pixels)
 PIXEL_PITCH_UM      = 10.8        # phase-pixel pitch
-FILL_FACTOR         = 0.92         # LINEAR fill factor of the piston mirror (1.0 = ideal)
+FILL_FACTOR         = 0.94         # LINEAR fill factor of the piston mirror (1.0 = ideal)
 
 
 LAMBDA_NM           = 905.0       # operating wavelength
@@ -988,7 +988,7 @@ def plot_grid_composite(table, rows, cols, outdir, cache):
     #ax.set_title(f"3$\\times 3$ steering grid, stacked far field   [{QUANT_RULE} / {LEVEL_PHASE_MODEL}]\n"
     #            f"circles = target order, label = $\\eta_{{target}}$",
     #             fontweight="bold", fontsize=14)
-    ax.set_title(f"$3\\times 3$ steering grid, stacked far field\n"
+    ax.set_title(f"$3\\times 3$ steering grid, stacked far-field\n"
                 f"circles = +1st order target with $\\eta_{{target}}$",
                 fontweight="bold", fontsize=14)
     
